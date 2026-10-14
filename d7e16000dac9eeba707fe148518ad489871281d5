@@ -1,0 +1,56 @@
+{
+  "tag": "v0.1.0-preview.4",
+  "timestamp": "2026-10-14T18:48:04.9365656+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/38617713687",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "package": "success",
+    "smoke": "success",
+    "publish": "success"
+  },
+  "startup": {
+    "success": true,
+    "views": 6,
+    "passiveHardwareStarted": false,
+    "timestamp": "2026-10-14T18:47:33.8439522+00:00"
+  },
+  "publication": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/henri16bit/Otimizador-/releases/assets/641314666",
+        "contentType": "application/zip",
+        "createdAt": "2026-10-14T18:47:49Z",
+        "digest": "sha256:db7838d721fade37ca64be54d3077f9fba2c7bd9d5154a1734e5ed93dd503528",
+        "downloadCount": 0,
+        "id": "RA_kwDOVJq4M84mOa9q",
+        "label": "",
+        "name": "PCAnalyzer-windows-x64.zip",
+        "size": 148206320,
+        "state": "uploaded",
+        "updatedAt": "2026-10-14T18:47:55Z",
+        "url": "https://github.com/henri16bit/Otimizador-/releases/download/v0.1.0-preview.4/PCAnalyzer-windows-x64.zip"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/henri16bit/Otimizador-/releases/assets/641314667",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-10-14T18:47:49Z",
+        "digest": "sha256:e1e3addc443f34617ae435fddecfb81666670a426f567e6be581300a616e79ab",
+        "downloadCount": 0,
+        "id": "RA_kwDOVJq4M84mOa9r",
+        "label": "",
+        "name": "PCAnalyzer-windows-x64.zip.sha256",
+        "size": 94,
+        "state": "uploaded",
+        "updatedAt": "2026-10-14T18:47:49Z",
+        "url": "https://github.com/henri16bit/Otimizador-/releases/download/v0.1.0-preview.4/PCAnalyzer-windows-x64.zip.sha256"
+      }
+    ],
+    "isDraft": false,
+    "url": "https://github.com/henri16bit/Otimizador-/releases/tag/v0.1.0-preview.4"
+  }
+}
