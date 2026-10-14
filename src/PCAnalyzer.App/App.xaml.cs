@@ -2,6 +2,7 @@ using System.Windows;
 using PCAnalyzer.App.Services;
 using PCAnalyzer.App.ViewModels;
 using System.Windows.Threading;
+using System.Windows.Controls;
 
 namespace PCAnalyzer.App;
 
@@ -45,16 +46,56 @@ public partial class App : Application
         {
             // Exercise resources, templates, bindings and all main views without collecting
             // hardware, generating load, opening dialogs or changing Windows settings.
-            var tabs = FindTabs(window) ?? throw new InvalidOperationException("As abas da janela principal não foram encontradas.");
-            for (var index = 0; index < tabs.Items.Count; index++)
+            var tabs = window.FindName("MainPages") as TabControl ?? throw new InvalidOperationException("As páginas principais não foram encontradas.");
+            var navigation = window.FindName("Navigation") as ListBox ?? throw new InvalidOperationException("O menu principal não foi encontrado.");
+            var viewModel = (MainViewModel)window.DataContext;
+            var detailViews = 0;
+            var initialWidth = window.Width; var initialHeight = window.Height;
+            foreach (var section in viewModel.Sections)
             {
-                tabs.SelectedIndex = index;
+                viewModel.NavigateCommand.Execute(section.Id);
                 window.UpdateLayout();
                 await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                if (tabs.SelectedIndex != section.Tab || !Equals(navigation.SelectedItem, section) || viewModel.PageTitle != section.Name)
+                    throw new InvalidOperationException("O menu e a página ficaram fora de sincronia: " + section.Id);
+                if (section.Id is "dashboard" or "componentes" or "investigar")
+                    _startup.CaptureView((FrameworkElement)window.Content, section.Id);
+                foreach (var nested in Descendants<TabControl>(tabs).Where(t => t != tabs).ToArray())
+                {
+                    for (var index = 0; index < nested.Items.Count; index++)
+                    {
+                        nested.SelectedIndex = index;
+                        window.UpdateLayout();
+                        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                        detailViews++;
+                        foreach (var expander in Descendants<Expander>(nested).ToArray()) expander.IsExpanded = true;
+                        window.UpdateLayout();
+                        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                        foreach (var expander in Descendants<Expander>(nested).ToArray()) expander.IsExpanded = false;
+                    }
+                }
             }
+            viewModel.OpenComponentCommand.Execute("ram");
+            if (viewModel.SelectedSection?.Id != "componentes" || viewModel.SelectedComponent?.Id != "ram")
+                throw new InvalidOperationException("O atalho de componente não selecionou a memória.");
+            viewModel.OpenInvestigationCommand.Execute("jogos");
+            if (viewModel.SelectedSection?.Id != "investigar" || viewModel.InvestigationTab != 1)
+                throw new InvalidOperationException("O atalho de jogos não abriu a investigação correta.");
+            viewModel.NavigateCommand.Execute("fontes");
+            if (viewModel.SelectedSection?.Id != "resultados" || viewModel.ResultTab != 2)
+                throw new InvalidOperationException("O atalho de fontes não abriu a página correta.");
+            viewModel.NavigateCommand.Execute("dashboard");
+            window.Width = window.MinWidth; window.Height = window.MinHeight;
+            window.UpdateLayout();
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            _startup.CaptureView((FrameworkElement)window.Content, "compact");
+            window.Width = initialWidth; window.Height = initialHeight;
+            window.UpdateLayout();
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            _startup.CaptureView((FrameworkElement)window.Content, "overview");
             if (!window.IsVisible || window.ActualWidth <= 0 || window.ActualHeight <= 0)
                 throw new InvalidOperationException("A janela WPF não ficou visível com dimensões válidas.");
-            _startup.ReportSmokeSuccess(tabs.Items.Count);
+            _startup.ReportSmokeSuccess(tabs.Items.Count, detailViews);
             window.Close();
         }
         catch (Exception exception)
@@ -64,14 +105,13 @@ public partial class App : Application
         }
     }
 
-    private static System.Windows.Controls.TabControl? FindTabs(DependencyObject parent)
+    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
     {
         for (var index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); index++)
         {
             var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, index);
-            if (child is System.Windows.Controls.TabControl tabs) return tabs;
-            if (FindTabs(child) is { } nested) return nested;
+            if (child is T match) yield return match;
+            foreach (var nested in Descendants<T>(child)) yield return nested;
         }
-        return null;
     }
 }

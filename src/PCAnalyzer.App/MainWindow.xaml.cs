@@ -10,8 +10,14 @@ public partial class MainWindow : Window
     private bool _canClose;
     public MainWindow(MainViewModel viewModel, bool initializeHardware = true)
     {
+        _viewModel = viewModel;
         InitializeComponent();
-        _viewModel = viewModel; DataContext = viewModel;
+        var workArea = SystemParameters.WorkArea;
+        MinWidth = Math.Min(MinWidth, Math.Max(500, workArea.Width - 24));
+        MinHeight = Math.Min(MinHeight, Math.Max(400, workArea.Height - 24));
+        Width = Math.Min(Width, workArea.Width - 24);
+        Height = Math.Min(Height, workArea.Height - 24);
+        DataContext = viewModel;
         if (initializeHardware) Loaded += async (_, _) => await viewModel.InitializeAsync();
         StateChanged += (_, _) => viewModel.IsMinimized = WindowState == WindowState.Minimized;
     }

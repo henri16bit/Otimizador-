@@ -2,6 +2,16 @@
 
 Ambiente: Debian 13 x64, SDK .NET 10.0.402 (runtime 10.0.13). O SDK foi baixado de `builds.dotnet.microsoft.com` e verificado por SHA-512 contra o manifesto oficial. Pacotes NuGet restaurados com verificação normal de TLS/assinaturas; versões e hashes estão nos lockfiles.
 
+## Revisão da interface
+
+A suíte portátil passou a **116 casos aprovados**, incluindo apresentação de unidades sem modificar as amostras, RAM física sincronizada, leituras indisponíveis, precisão de valores pequenos, escala dos gráficos e recebimento identificado de um único adaptador. Os cinco testes Python de pacote e os cinco cenários PowerShell isolados de publicação também passaram. O resultado C# está em `artifacts/test-results/interface.trx`.
+
+O workflow de release verifica no Windows as oito páginas, sete abas internas, atalhos, tamanho compacto, abertura e fechamento, e guarda capturas PNG em seus artefatos. O resultado da execução é registrado em `refs/notes/pcanalyzer-releases`; uma captura da visão geral pode ser obtida por `refs/notes/pcanalyzer-ui-preview`. A API GitHub continua inacessível neste ambiente, mas o resultado remoto pode ser conferido pelo Git.
+
+A versão anterior `v0.1.0-preview.4` já teve abertura/renderização/fechamento confirmados no runner Windows, com [registro da execução](https://github.com/henri16bit/Otimizador-/actions/runs/38617713687) e ZIP/SHA256 publicados. Isso não valida sensores, alterações administrativas, ETW/PresentMon ou o Windows 10 Pro 22H2 do computador alvo.
+
+## Validação da implementação inicial
+
 | Verificação | Resultado observado |
 | --- | --- |
 | Solução completa, Release | 12 projetos compilados, incluindo XAML/WPF, auxiliar e verificador. Zero erros e zero avisos. |

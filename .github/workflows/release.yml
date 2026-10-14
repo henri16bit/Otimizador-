@@ -9,7 +9,7 @@ name: Publish Windows release
       tag:
         description: Existing version tag to publish
         required: true
-        default: v0.1.0-preview.4
+        default: v0.2.0-preview.1
 
 permissions:
   contents: read
@@ -85,6 +85,7 @@ jobs:
           name: release-startup-results
           path: |
             artifacts/startup-smoke-*.json
+            artifacts/startup-smoke-*.png
             artifacts/release-publication.json
           if-no-files-found: warn
       - name: Record publication result for Git clients

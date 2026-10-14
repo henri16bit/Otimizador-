@@ -10,17 +10,21 @@ using PCAnalyzer.Core;
 
 namespace PCAnalyzer.App.ViewModels;
 
-public sealed record Section(string Id, string Name, string? Component, int Tab);
+public sealed record Section(string Id, string Name, string Icon, int Tab, string Description);
+public sealed record ComponentChoice(string Id, string Name, string? Component);
 public sealed record MetricRow(MetricSample Sample)
 {
-    public string Name => Sample.Key;
-    public string Value => Sample.Status == Availability.Available && Sample.Value is { } v && double.IsFinite(v) ? v.ToString("0.###", CultureInfo.CurrentCulture) : "—";
-    public string Unit => Sample.Unit;
+    public string Key => Sample.Key;
+    public string Name => MetricPresentation.Name(Sample);
+    public string Component => Sample.Component;
+    public string Value => MetricPresentation.Format(Sample).Value;
+    public string Unit => MetricPresentation.Format(Sample).Unit;
+    public bool IsAvailable => MetricPresentation.Available(Sample);
     public string Source => Sample.Source;
     public string State => MainViewModel.AvailabilityLabel(Sample.Status);
     public string Cadence => Sample.SamplingInterval.TotalSeconds > 0 ? $"{Sample.SamplingInterval.TotalSeconds:0.##} s" : "—";
     public string Time => Sample.Timestamp.LocalDateTime.ToString("HH:mm:ss.fff");
-    public string Details => $"{Sample.Method}\n{Sample.Kind} · {Sample.Aggregation}\n{Sample.Limitation ?? "Sem limitação adicional reportada pela fonte."}";
+    public string Details => $"Identificador: {Sample.Key}\n{Sample.Method}\n{Sample.Kind} · {Sample.Aggregation}\n{Sample.Limitation ?? "Sem limitação adicional reportada pela fonte."}";
 }
 public sealed record HardwareRow(string Component, string Name, string? Value, string Source, string State, string? Limitation);
 public sealed record ProcessRow(ProcessSample Sample)
@@ -56,12 +60,13 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private int _droppedSamples;
     private bool _closing, _isBusy;
     private volatile bool _minimized, _paused;
-    private string _status = "Preparando descoberta passiva…";
-    private string _operationText = "Nenhum teste ativo executado. Ping, laboratório, ETW e importação de jogos dependem de ação manual.";
-    private string _operationTitle = "Resultados técnicos";
+    private string _status = "Identificando o hardware do seu PC…";
+    private string _operationText = "Escolha um teste em Investigar. Seu resultado aparecerá aqui quando terminar.";
+    private string _operationTitle = "Nenhum teste iniciado";
     private string _mode = "Leve";
     private double _intervalSeconds = 5, _progress;
     private Section? _section;
+    private ComponentChoice? _component;
     private MetricRow? _selectedMetric;
     private ProcessRow? _selectedProcess;
     private Finding? _selectedFinding;
@@ -71,20 +76,39 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private RelativeSeries? _selectedRelativeSeries;
     private ChangeRecord? _selectedChange;
     private SessionSummary? _selectedSession, _beforeSession, _afterSession;
-    private int _contentTab, _resultTab;
+    private int _contentTab, _resultTab, _investigationTab;
     private IReadOnlyList<MetricSample> _chartSamples = [];
+    private IReadOnlyList<MetricSample> _overviewChartSamples = [];
+    private string _processFilter = "";
     private string _metricFilter = "", _sessionLabel = "Diagnóstico local", _workload = "Desktop em repouso / informar condição", _notes = "", _pingHost = "", _processIdText = "";
     private bool _anonymize = true;
 
     public MainViewModel(IApplicationBackend backend)
     {
         _backend = backend;
-        Sections = [new("dashboard", "Dashboard", null, 0), new("cpu", "CPU", "CPU", 0), new("gpu", "GPU", "GPU", 0),
-            new("ram", "RAM", "RAM", 0), new("nvme", "NVMe / discos", "Disco", 0), new("rede", "Rede", "Rede", 2),
-            new("dpc", "DPC / ISR", "DPC", 2), new("latency", "Latency Analysis", null, 2), new("jogos", "Análise de jogos", "Jogos", 2),
-            new("processos", "Processos / Windows", null, 1), new("testes", "Test Lab", null, 2), new("otimizacoes", "Otimizações", null, 3),
-            new("historico", "Histórico / relatórios", null, 4), new("config", "Configurações", null, 5)];
+        Sections = [new("dashboard", "Visão geral", "\uE80F", 0, "Acompanhe seu PC e escolha o que investigar."),
+            new("componentes", "Componentes", "\uE950", 1, "Escolha um componente para ver suas leituras e seu histórico."),
+            new("processos", "Processos", "\uE9D9", 2, "Encontre os aplicativos que estão usando CPU e memória."),
+            new("investigar", "Investigar", "\uE721", 3, "Escolha um teste de acordo com o problema observado."),
+            new("resultados", "Resultados", "\uE9D2", 4, "Consulte as observações e o resultado do último teste."),
+            new("historico", "Histórico", "\uE81C", 5, "Salve, abra e compare sessões de diagnóstico."),
+            new("ajustes", "Ajustes", "\uE9E9", 6, "Revise uma alteração por vez e restaure quando necessário."),
+            new("config", "Configurações", "\uE713", 7, "Defina a frequência da coleta e consulte as informações do aplicativo.")];
+        ComponentChoices = [new("cpu", "Processador (CPU)", "CPU"), new("gpu", "Placa de vídeo (GPU)", "GPU"),
+            new("ram", "Memória (RAM)", "RAM"), new("nvme", "Discos e NVMe", "Disco"), new("rede", "Rede", "Rede"), new("todos", "Todos os componentes", null)];
         _section = Sections[0];
+        _component = ComponentChoices[0];
+        NavigateCommand = new RelayCommand(parameter => Navigate(parameter?.ToString() ?? "dashboard"));
+        OpenComponentCommand = new RelayCommand(parameter =>
+        {
+            SelectedComponent = ComponentChoices.FirstOrDefault(c => c.Id == parameter?.ToString()) ?? ComponentChoices[0];
+            Navigate("componentes");
+        });
+        OpenInvestigationCommand = new RelayCommand(parameter =>
+        {
+            InvestigationTab = parameter?.ToString() switch { "jogos" => 1, "drivers" => 2, "testes" => 3, _ => 0 };
+            Navigate("investigar");
+        });
         SaveCommand = Command(SaveCurrentSessionAsync);
         RefreshHistoryCommand = Command(RefreshHistoryAsync);
         LoadSessionCommand = Command(LoadSessionAsync, () => SelectedSession is not null);
@@ -106,14 +130,17 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         DiskReadCommand = Command(() => LabAsync("disk-read"));
         SavePreferencesCommand = Command(SavePreferencesAsync);
         CancelCommand = new RelayCommand(() => _operation?.Cancel(), () => IsBusy);
-        PauseCommand = new RelayCommand(() => { _paused = !_paused; Notify(nameof(PauseCaption)); Status = _paused ? "Coleta pausada pelo usuário." : "Coleta passiva retomada."; });
-        LiveCommand = new RelayCommand(() => { _loadedSession = null; Replace(Capabilities, _inventory?.Capabilities ?? []); Notify(nameof(ViewContext)); RefreshDisplay(); AnalyzeDisplay(); });
+        PauseCommand = new RelayCommand(() => { _paused = !_paused; Notify(nameof(PauseCaption)); Notify(nameof(CollectionStateLabel)); Status = _paused ? "Coleta pausada pelo usuário." : "Coleta passiva retomada."; }, () => _inventory is not null && _loadedSession is null);
+        LiveCommand = new RelayCommand(() => { _loadedSession = null; Replace(Capabilities, _inventory?.Capabilities ?? []); NotifyViewState(); RefreshDisplay(); AnalyzeDisplay(); Status = "Visualização ao vivo. As leituras seguem o perfil de coleta selecionado."; }, () => _loadedSession is not null);
         NewSessionCommand = Command(NewSessionAsync);
         _uiTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => FlushUi(), Dispatcher.CurrentDispatcher);
         _uiTimer.Stop();
+        Replace(OverviewCards, MetricPresentation.Overview([], null));
     }
 
     public IReadOnlyList<Section> Sections { get; }
+    public IReadOnlyList<ComponentChoice> ComponentChoices { get; }
+    public ObservableCollection<OverviewCard> OverviewCards { get; } = [];
     public ObservableCollection<MetricRow> Metrics { get; } = [];
     public ObservableCollection<HardwareRow> Hardware { get; } = [];
     public ObservableCollection<ProcessRow> Processes { get; } = [];
@@ -129,6 +156,27 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public IReadOnlyList<string> CollectionModes { get; } = ["Leve", "Avançado"];
     public IReadOnlyList<double> Intervals { get; } = [1, 2, 5, 10, 15, 30, 60];
     public IReadOnlyList<MetricSample> ChartSamples { get => _chartSamples; private set => Set(ref _chartSamples, value); }
+    public IReadOnlyList<MetricSample> OverviewChartSamples { get => _overviewChartSamples; private set => Set(ref _overviewChartSamples, value); }
+    public string PageTitle => SelectedSection?.Name ?? "Visão geral";
+    public string PageDescription => SelectedSection?.Description ?? "";
+    public bool IsHistoryView => _loadedSession is not null;
+    public string CollectionStateLabel => IsHistoryView ? "Sessão salva" : _inventory is null ? "Detectando hardware" : _paused ? "Coleta pausada" : "Ao vivo";
+    public string MachineSummary => (_loadedSession?.Inventory ?? _inventory)?.Components.FirstOrDefault(c => c.Category == "CPU")?.Name ?? "Identificando os componentes do seu PC…";
+    public string ProcessFilter { get => _processFilter; set { if (Set(ref _processFilter, value)) RefreshVisibleProcesses(); } }
+    public ObservableCollection<ProcessRow> VisibleProcesses { get; } = [];
+    private void RefreshVisibleProcesses() => Replace(VisibleProcesses, Processes.Where(p => string.IsNullOrWhiteSpace(ProcessFilter)
+        || p.Name.Contains(ProcessFilter, StringComparison.OrdinalIgnoreCase) || p.Id.ToString(CultureInfo.InvariantCulture).Contains(ProcessFilter)));
+    public string FindingsSummary => Findings.Any(f => f.Category is FindingCategory.ObservedProblem or FindingCategory.PossibleProblem)
+        ? "Há observações para investigar" : Findings.Any(f => f.Category == FindingCategory.NoAnomaly)
+        ? "A triagem não indicou uma alteração" : "Aguardando contexto para a análise";
+    public IEnumerable<Finding> OverviewFindings => Findings.Take(3);
+    public string SelectedFindingCategory => SelectedFinding?.Category switch
+    {
+        FindingCategory.ObservedProblem => "Problema observado", FindingCategory.PossibleProblem => "Possível problema",
+        FindingCategory.OptimizationOpportunity => "Oportunidade de ajuste", FindingCategory.NoAnomaly => "Sem anomalia na triagem",
+        FindingCategory.InsufficientData => "Dados insuficientes", _ => "Selecione uma observação"
+    };
+    public string SelectedFindingConfidence => SelectedFinding?.Confidence switch { Confidence.High => "Alta", Confidence.Medium => "Média", Confidence.Low => "Baixa", _ => "—" };
     public string DataDirectory => _backend.DataDirectory;
     public bool IsBusy { get => _isBusy; private set { Set(ref _isBusy, value); RefreshCommands(); CancelCommand.Refresh(); } }
     public bool IsMinimized { get => _minimized; set => _minimized = value; }
@@ -147,13 +195,27 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public string Notes { get => _notes; set => Set(ref _notes, value); }
     public string PingHost { get => _pingHost; set { Set(ref _pingHost, value); PingCommand.Refresh(); } }
     public bool Anonymize { get => _anonymize; set => Set(ref _anonymize, value); }
-    public int ContentTab { get => _contentTab; set => Set(ref _contentTab, value); }
+    public int ContentTab { get => _contentTab; private set => Set(ref _contentTab, value); }
     public int ResultTab { get => _resultTab; set => Set(ref _resultTab, value); }
-    public Section? SelectedSection { get => _section; set { if (Set(ref _section, value)) { ContentTab = value?.Tab ?? 0; RefreshDisplay(); } } }
+    public int InvestigationTab { get => _investigationTab; set => Set(ref _investigationTab, value); }
+    public Section? SelectedSection { get => _section; set { if (value is not null && Set(ref _section, value)) { ContentTab = value.Tab; Notify(nameof(PageTitle)); Notify(nameof(PageDescription)); } } }
+    public ComponentChoice? SelectedComponent { get => _component; set { if (Set(ref _component, value)) { MetricFilter = ""; RefreshDisplay(); } } }
     public MetricRow? SelectedMetric { get => _selectedMetric; set { if (Set(ref _selectedMetric, value)) RefreshChart(); } }
-    public ProcessRow? SelectedProcess { get => _selectedProcess; set { if (Set(ref _selectedProcess, value) && value is not null) ProcessIdText = value.Id.ToString(CultureInfo.InvariantCulture); } }
-    public string ProcessIdText { get => _processIdText; set { Set(ref _processIdText, value); CaptureFramesCommand.Refresh(); } }
-    public Finding? SelectedFinding { get => _selectedFinding; set => Set(ref _selectedFinding, value); }
+    public ProcessRow? SelectedProcess { get => _selectedProcess; set { if (Set(ref _selectedProcess, value)) ProcessIdText = value?.Id.ToString(CultureInfo.InvariantCulture) ?? ""; } }
+    public string ProcessIdText
+    {
+        get => _processIdText;
+        set
+        {
+            if (Set(ref _processIdText, value) && _selectedProcess is not null && value != _selectedProcess.Id.ToString(CultureInfo.InvariantCulture))
+            {
+                // A manually entered PID is a separate explicit selection.
+                _selectedProcess = null; Notify(nameof(SelectedProcess));
+            }
+            CaptureFramesCommand.Refresh();
+        }
+    }
+    public Finding? SelectedFinding { get => _selectedFinding; set { if (Set(ref _selectedFinding, value)) { Notify(nameof(SelectedFindingCategory)); Notify(nameof(SelectedFindingConfidence)); } } }
     public SelectionItem? SelectedPowerPlan { get => _selectedPowerPlan; set { Set(ref _selectedPowerPlan, value); PowerPreviewCommand.Refresh(); } }
     public NetworkSettingView? SelectedNetworkSetting { get => _selectedNetworkSetting; set { Set(ref _selectedNetworkSetting, value); SelectedNetworkValue = null; Notify(nameof(NetworkValues)); } }
     public IReadOnlyList<SelectionItem> NetworkValues => SelectedNetworkSetting?.ValidValues ?? [];
@@ -186,7 +248,21 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public RelayCommand CancelCommand { get; }
     public RelayCommand PauseCommand { get; }
     public RelayCommand LiveCommand { get; }
+    public RelayCommand NavigateCommand { get; }
+    public RelayCommand OpenComponentCommand { get; }
+    public RelayCommand OpenInvestigationCommand { get; }
     private CancellationToken OperationToken => _operation?.Token ?? _lifetime.Token;
+
+    private void Navigate(string id)
+    {
+        if (id is "fontes" or "observacoes") { ResultTab = id == "fontes" ? 2 : 0; id = "resultados"; }
+        SelectedSection = Sections.FirstOrDefault(s => s.Id == id) ?? Sections[0];
+    }
+    private void NotifyViewState()
+    {
+        Notify(nameof(ViewContext)); Notify(nameof(CollectionStateLabel)); Notify(nameof(IsHistoryView)); Notify(nameof(MachineSummary));
+        PauseCommand.Refresh(); LiveCommand.Refresh();
+    }
 
     private AsyncCommand Command(Func<Task> action, Func<bool>? canExecute = null) => new(() => RunOperationAsync(action), () => !IsBusy && _inventory is not null && (canExecute?.Invoke() ?? true));
     private void RefreshCommands()
@@ -205,8 +281,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             _lifetime.Token.ThrowIfCancellationRequested();
             Replace(Capabilities, _inventory.Capabilities);
             RefreshDisplay(); AnalyzeDisplay();
-            Status = "Coleta passiva ativa. Nenhum benchmark ou rastreamento de kernel iniciado.";
-            RefreshCommands(); _uiTimer.Start(); _collectorTask = Task.Run(CollectLoopAsync);
+            Status = "Coleta ao vivo ativa. Escolha um componente ou um teste para investigar.";
+            NotifyViewState(); RefreshCommands(); _uiTimer.Start(); _collectorTask = Task.Run(CollectLoopAsync);
             try { await RefreshHistoryAsync(); } catch (Exception ex) { RecordFailure("Ler histórico", ex); }
         }
         catch (OperationCanceledException) when (_closing) { }
@@ -256,7 +332,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         foreach (var sample in batch.Metrics) _latest[sample.Key] = sample;
         if (_loadedSession is null)
         {
+            var selectedPid = SelectedProcess?.Id; var selectedName = SelectedProcess?.Name;
             Replace(Processes, batch.Processes.Select(p => new ProcessRow(p)));
+            RefreshVisibleProcesses();
+            if (selectedPid.HasValue) SelectedProcess = VisibleProcesses.FirstOrDefault(p => p.Id == selectedPid && p.Name == selectedName);
             RefreshDisplay();
             if (DateTimeOffset.UtcNow - _lastAnalysis > TimeSpan.FromSeconds(15)) AnalyzeDisplay();
         }
@@ -265,7 +344,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     }
     private bool MatchesComponent(string component)
     {
-        var selected = SelectedSection?.Component;
+        var selected = SelectedComponent?.Component;
         return selected is null || component.Contains(selected, StringComparison.OrdinalIgnoreCase)
             || selected == "Disco" && (component.Contains("NVMe", StringComparison.OrdinalIgnoreCase) || component.Contains("Storage", StringComparison.OrdinalIgnoreCase))
             || selected == "Disco" && component.Contains("Armazenamento", StringComparison.OrdinalIgnoreCase)
@@ -275,7 +354,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (MatchesComponent(sample.Component)) return true;
         var key = sample.Key.ToLowerInvariant();
-        return SelectedSection?.Id switch
+        return SelectedComponent?.Id switch
         {
             "gpu" => key.StartsWith("gpu."),
             "cpu" => key.StartsWith("cpu."),
@@ -289,19 +368,25 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     }
     private void RefreshDisplay()
     {
-        var previousKey = SelectedMetric?.Name;
+        var previousKey = SelectedMetric?.Key;
         var source = _loadedSession?.Samples.GroupBy(s => s.Key).Select(g => g.Last()).ToArray() ?? _latest.Values.ToArray();
-        Replace(Metrics, source.Where(s => MatchesMetric(s) && (string.IsNullOrWhiteSpace(MetricFilter) || s.Key.Contains(MetricFilter, StringComparison.OrdinalIgnoreCase) || s.Source.Contains(MetricFilter, StringComparison.OrdinalIgnoreCase)))
+        Replace(Metrics, source.Where(s => MatchesMetric(s) && (string.IsNullOrWhiteSpace(MetricFilter) || s.Key.Contains(MetricFilter, StringComparison.OrdinalIgnoreCase) || MetricPresentation.Name(s).Contains(MetricFilter, StringComparison.OrdinalIgnoreCase) || s.Source.Contains(MetricFilter, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(s => s.Component).ThenBy(s => s.Key).Select(s => new MetricRow(s)));
-        SelectedMetric = Metrics.FirstOrDefault(m => m.Name == previousKey) ?? Metrics.FirstOrDefault(m => m.Sample.Value.HasValue) ?? Metrics.FirstOrDefault();
+        var preferred = SelectedComponent?.Id switch { "ram" => "memory.available.bytes", "gpu" => ".utilization.percent", "nvme" => ".read.bytes_per_second", "rede" => ".receive.bytes_per_second", _ => "cpu.total.percent" };
+        SelectedMetric = Metrics.FirstOrDefault(m => m.Key == previousKey)
+            ?? Metrics.FirstOrDefault(m => m.Key == preferred || preferred.StartsWith('.') && m.Key.EndsWith(preferred, StringComparison.Ordinal))
+            ?? Metrics.FirstOrDefault(m => m.IsAvailable) ?? Metrics.FirstOrDefault();
         var inventory = _loadedSession?.Inventory ?? _inventory;
         Replace(Hardware, inventory?.Components.Where(c => MatchesComponent(c.Category)).SelectMany(c => c.Facts.Select(f => new HardwareRow(c.Name, f.Name, f.Value ?? "—", f.Source, AvailabilityLabel(f.Status), f.Limitation))) ?? []);
+        Replace(OverviewCards, MetricPresentation.Overview(source, inventory));
+        if (_loadedSession is { } historical) OverviewChartSamples = historical.Samples.Where(s => s.Key == "cpu.total.percent").TakeLast(600).ToArray();
+        else lock (_sampleLock) OverviewChartSamples = _samples.Where(s => s.Key == "cpu.total.percent").TakeLast(600).ToArray();
         RefreshChart();
     }
     private void RefreshChart()
     {
         if (SelectedMetric is null) { ChartSamples = []; return; }
-        var selected = SelectedMetric.Name;
+        var selected = SelectedMetric.Key;
         if (_loadedSession is { } saved) ChartSamples = saved.Samples.Where(s => s.Key == selected).TakeLast(600).ToArray();
         else lock (_sampleLock) ChartSamples = _samples.Where(s => s.Key == selected).TakeLast(600).ToArray();
     }
@@ -315,6 +400,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         var previous = SelectedFinding?.Id;
         Replace(Findings, findings);
         SelectedFinding = Findings.FirstOrDefault(f => f.Id == previous) ?? Findings.FirstOrDefault();
+        Notify(nameof(FindingsSummary)); Notify(nameof(OverviewFindings));
         _lastAnalysis = DateTimeOffset.UtcNow;
     }
     private DiagnosticSession Snapshot()
@@ -348,6 +434,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _backend.LogError(operation, ex); Status = $"{operation}: {ex.Message}";
         OperationTitle = $"Falha · {operation}";
         ResultTab = 1;
+        Navigate("resultados");
         OperationText = $"{ex.Message}\n\nA indisponibilidade não é evidência de problema de hardware. Consulte o log local em {DataDirectory}.";
     }
     private async Task SaveCurrentSessionAsync()
@@ -360,7 +447,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         await SaveCurrentSessionAsync();
         lock (_sampleLock) { _samples.Clear(); _droppedSamples = 0; _pendingBatch = null; }
         _sessionId = Guid.NewGuid(); _startedAt = DateTimeOffset.UtcNow; _loadedSession = null; _latest.Clear(); _collectionChanges.Clear();
-        Notify(nameof(ViewContext)); Notify(nameof(BufferInfo)); RefreshDisplay(); AnalyzeDisplay(); Status = "Nova janela de diagnóstico; sessão anterior salva.";
+        NotifyViewState(); Notify(nameof(BufferInfo)); RefreshDisplay(); AnalyzeDisplay(); Status = "Nova janela de diagnóstico; sessão anterior salva.";
     }
     private async Task RefreshHistoryAsync() => Replace(Sessions, await _backend.ListSessionsAsync(OperationToken));
     private async Task LoadSessionAsync()
@@ -368,8 +455,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         if (SelectedSession is null) return;
         _loadedSession = await _backend.LoadSessionAsync(SelectedSession.Id, OperationToken) ?? throw new InvalidOperationException("Sessão não encontrada.");
         Processes.Clear();
+        RefreshVisibleProcesses();
         Replace(Capabilities, _loadedSession.Inventory.Capabilities);
-        Notify(nameof(ViewContext)); ContentTab = 0; RefreshDisplay(); AnalyzeDisplay();
+        NotifyViewState(); Navigate("dashboard"); RefreshDisplay(); AnalyzeDisplay();
         Status = "Visualização de sessão salva. A coleta ao vivo segue em segundo plano; use Voltar ao vivo.";
     }
     private Task CompareAsync() => ShowResultAsync(_backend.CompareAsync(BeforeSession!.Id, AfterSession!.Id, OperationToken));
@@ -388,9 +476,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         SelectedRelativeSeries = ResultSeries.FirstOrDefault();
         Notify(nameof(HasRelativeSeries));
         ResultTab = 1;
+        Navigate("resultados");
         if (result.Metrics is { Count: > 0 } metrics)
         {
-            if (_loadedSession is not null) { _loadedSession = null; Replace(Capabilities, _inventory?.Capabilities ?? []); Notify(nameof(ViewContext)); }
+            if (_loadedSession is not null) { _loadedSession = null; Replace(Capabilities, _inventory?.Capabilities ?? []); NotifyViewState(); }
             lock (_sampleLock) { _samples.AddRange(metrics); TrimSamples(); }
             foreach (var metric in metrics) _latest[metric.Key] = metric;
             RefreshDisplay(); AnalyzeDisplay(); Notify(nameof(BufferInfo));
@@ -453,8 +542,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     }
     private async Task ShowChangeAsync(ChangeRecord change)
     {
-        OperationTitle = $"Alteração: {change.State}";
+        OperationTitle = $"Alteração: {ChangeLabelConverter.Label(change.State)}";
         ResultTab = 1;
+        Navigate("resultados");
         OperationText = $"{change.Kind} · {change.Target}\nAntes: {change.Before}\nDepois: {change.After}\nEstado verificado: {change.State}\n{change.Error}\n{change.RecoveryInstructions}";
         Replace(Changes, await _backend.ListChangesAsync(OperationToken)); Status = OperationTitle;
     }

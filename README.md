@@ -62,12 +62,15 @@ Se o aplicativo encerrar ao abrir, consulte `%LOCALAPPDATA%\PCAnalyzer\logs\star
 
 ## Uso inicial
 
-1. Abra a aplicação como usuário normal e aguarde a descoberta. Consulte a tabela de capacidades para distinguir leitura disponível, sem suporte, ferramenta ausente e falha.
-2. Use o Dashboard e as seções CPU, GPU, RAM, NVMe, Rede e Processos para examinar os dados. Selecione uma série para ver seu gráfico, fonte, unidade, método, intervalo e limitações.
-3. Informe a carga observada e notas: por exemplo, repouso, cena de jogo reproduzível ou uma aplicação específica. Aguarde uma janela suficiente antes de interpretar a triagem.
-4. Salve a sessão no histórico. Registre sessões diferentes para condições diferentes; anote mudanças de intervalo, carga e configuração.
-5. Inicie testes ativos apenas pelos respectivos comandos. Execute uma mudança por vez, meça novamente sob condições equivalentes e use Performance Comparison.
-6. Exporte a sessão em JSON, CSV ou HTML. A anonimização vem ativada; confira textos livres antes de compartilhar.
+1. Abra como usuário normal. **Visão geral** mostra CPU, RAM física usada, GPU e recebimento de um adaptador de rede, com as leituras reais disponíveis e atalhos por tipo de problema. Dados ausentes aparecem com `—`.
+2. Em **Componentes**, escolha CPU, GPU, RAM, discos ou rede. Busque uma leitura e selecione-a para ver o gráfico. Origem, método, limitações e inventário ficam nos detalhes expansíveis.
+3. Em **Processos**, busque um aplicativo por nome/PID e ordene CPU ou memória pelo cabeçalho. A seleção leva à investigação de frames desse processo.
+4. Em **Investigar**, escolha Rede, Jogos, Travadas e drivers ou Testes rápidos. Cada captura/teste ativo começa somente pelos comandos e confirmações correspondentes.
+5. **Resultados** reúne observações da triagem, o último teste e fontes disponíveis. Ao concluir uma operação, seu resultado abre automaticamente. As observações não são uma garantia de saúde do hardware.
+6. Em **Histórico**, descreva a carga e as condições, salve sessões, compare antes/depois e exporte HTML, CSV ou JSON. Uma sessão salva tem uma faixa visível com a opção **Voltar ao vivo**.
+7. **Ajustes** permite ler, revisar e confirmar uma mudança de energia/rede por vez e restaurar o valor anterior. **Configurações** reúne perfil, intervalo, armazenamento e limites da coleta.
+
+A interface usa um único menu lateral e ajusta o tamanho inicial à área útil da tela. As unidades legíveis são conversões de apresentação; valores e unidades originais permanecem nas sessões e relatórios. A RAM do resumo é derivada de memória física total/disponível sincronizadas, não de commit. A rede mostra o adaptador com maior recebimento medido, identificado no cartão; não soma tráfego possivelmente duplicado por VPNs.
 
 O perfil **Leve** usa intervalo alvo de 5 s e o **Avançado**, 1 s; o intervalo pode ser ajustado entre 1 e 60 s. Ao minimizar, a cadência passa a no mínimo 15 s. A interface atualiza independentemente, aproximadamente uma vez por segundo. O buffer retém até 30.000 amostras totais, registra descartes nas notas da sessão e mostra até 600 pontos da série selecionada. O modo profundo é uma captura manual limitada, não um coletor permanente.
 

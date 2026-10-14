@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using PCAnalyzer.Core;
+using PCAnalyzer.App.ViewModels;
 
 namespace PCAnalyzer.App.Controls;
 
@@ -13,10 +14,10 @@ public sealed class TimeSeriesChart : FrameworkElement
     public static readonly DependencyProperty SamplesProperty = DependencyProperty.Register(nameof(Samples),
         typeof(IReadOnlyList<MetricSample>), typeof(TimeSeriesChart),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, (_, _) => { }));
-    private static readonly Brush GridBrush = new SolidColorBrush(Color.FromRgb(48, 65, 81));
-    private static readonly Brush LabelBrush = new SolidColorBrush(Color.FromRgb(147, 168, 188));
-    private static readonly Brush LineBrush = new SolidColorBrush(Color.FromRgb(100, 214, 201));
-    private static readonly Brush BackgroundBrush = new SolidColorBrush(Color.FromRgb(16, 24, 33));
+    private static readonly Brush GridBrush = new SolidColorBrush(Color.FromRgb(42, 56, 80));
+    private static readonly Brush LabelBrush = new SolidColorBrush(Color.FromRgb(162, 176, 199));
+    private static readonly Brush LineBrush = new SolidColorBrush(Color.FromRgb(120, 168, 255));
+    private static readonly Brush BackgroundBrush = new SolidColorBrush(Color.FromRgb(21, 30, 45));
     private readonly List<(MetricSample Sample, Point Point)> _points = [];
     private Rect _plot;
     private Point? _hover;
@@ -36,17 +37,19 @@ public sealed class TimeSeriesChart : FrameworkElement
         drawing.DrawRectangle(BackgroundBrush, null, new Rect(RenderSize));
         _points.Clear();
         if (ActualWidth < 100 || ActualHeight < 70) return;
-        _plot = new(62, 15, ActualWidth - 80, ActualHeight - 52);
+        _plot = new(68, 20, ActualWidth - 86, ActualHeight - 55);
         var samples = (Samples ?? []).TakeLast(600).OrderBy(s => s.Timestamp).ToArray();
         var available = samples.Where(Valid).ToArray();
         if (available.Length == 0)
         {
-            Text(drawing, "Sem dados disponíveis para esta métrica", new Point(20, ActualHeight / 2 - 10), 12);
+            Text(drawing, "Nenhuma leitura disponível para este gráfico", new Point(20, ActualHeight / 2 - 10), 12);
             return;
         }
         var minimum = available.Min(s => s.Value!.Value);
         var maximum = available.Max(s => s.Value!.Value);
+        if (available[0].Unit == "%" && minimum >= 0 && maximum <= 100) { minimum = 0; maximum = 100; }
         if (Math.Abs(maximum - minimum) < 0.00000001) { var padding = Math.Max(Math.Abs(maximum) * .05, .5); minimum -= padding; maximum += padding; }
+        var scale = MetricPresentation.Scale(available[0].Unit, Math.Max(Math.Abs(minimum), Math.Abs(maximum)));
         var first = samples[0].Timestamp;
         var last = samples[^1].Timestamp;
         var span = Math.Max((last - first).TotalMilliseconds, 1);
@@ -54,10 +57,10 @@ public sealed class TimeSeriesChart : FrameworkElement
         {
             var y = _plot.Bottom - _plot.Height * tick / 4;
             drawing.DrawLine(new Pen(GridBrush, 1), new(_plot.Left, y), new(_plot.Right, y));
-            var label = (minimum + (maximum - minimum) * tick / 4).ToString("0.##", CultureInfo.CurrentCulture);
-            Text(drawing, label, new(3, y - 7), 10);
+            var label = MetricPresentation.Number((minimum + (maximum - minimum) * tick / 4) / scale.Factor);
+            Text(drawing, label, new(3, y - 7), 11);
         }
-        Text(drawing, available[0].Unit, new(4, 0), 10);
+        Text(drawing, scale.Unit, new(4, 0), 11);
         Text(drawing, first.LocalDateTime.ToString("HH:mm:ss"), new(_plot.Left, _plot.Bottom + 8), 10);
         Text(drawing, last.LocalDateTime.ToString("HH:mm:ss"), new(Math.Max(_plot.Left, _plot.Right - 57), _plot.Bottom + 8), 10);
         Point? previous = null;
@@ -92,7 +95,8 @@ public sealed class TimeSeriesChart : FrameworkElement
         if (_plot.Contains(_hover.Value) && _points.Count > 0)
         {
             var nearest = _points.MinBy(p => Math.Abs(p.Point.X - _hover.Value.X)).Sample;
-            ToolTip = $"{nearest.Key}\n{nearest.Value:0.###} {nearest.Unit} · {nearest.Timestamp.LocalDateTime:HH:mm:ss.fff}\n{nearest.Source} · intervalo {nearest.SamplingInterval.TotalSeconds:0.###} s\n{nearest.Method}\n{nearest.Limitation}";
+            var display = MetricPresentation.Format(nearest);
+            ToolTip = $"{MetricPresentation.Name(nearest)}\n{display.Value} {display.Unit} · {nearest.Timestamp.LocalDateTime:HH:mm:ss.fff}\n{nearest.Source} · intervalo {nearest.SamplingInterval.TotalSeconds:0.###} s\n{nearest.Method}\n{nearest.Key}\n{nearest.Limitation}";
         }
         else ToolTip = null;
         InvalidateVisual();

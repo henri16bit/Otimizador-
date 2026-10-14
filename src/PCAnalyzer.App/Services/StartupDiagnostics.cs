@@ -2,6 +2,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace PCAnalyzer.App.Services;
 
@@ -20,10 +23,21 @@ internal sealed class StartupDiagnostics
             ? arguments[outputIndex + 1] : Path.Combine(Path.GetTempPath(), "PCAnalyzer-smoke-result.json");
     }
 
-    public void ReportSmokeSuccess(int views) => WriteSmokeResult(new
+    public void ReportSmokeSuccess(int views, int detailViews) => WriteSmokeResult(new
     {
-        success = true, views, passiveHardwareStarted = false, timestamp = DateTimeOffset.UtcNow
+        success = true, views, detailViews, compactLayoutChecked = true, passiveHardwareStarted = false, timestamp = DateTimeOffset.UtcNow
     });
+
+    public void CaptureView(FrameworkElement element, string name)
+    {
+        var path = Path.GetFullPath(Path.ChangeExtension(_smokeOutput, null) + "-" + name + ".png");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(element.ActualWidth), (int)Math.Ceiling(element.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(element);
+        var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
 
     public void ReportFailure(Exception exception)
     {
