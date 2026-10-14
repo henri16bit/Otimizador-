@@ -1,0 +1,32 @@
+# Progresso da implementação
+
+O repositório contém código executável, interface WPF e integrações reais. A implementação avançou por módulos funcionais, mas **os critérios de aceitação dependentes de Windows/hardware ainda não foram demonstrados**. Este registro distingue código implementado, testes de processamento e validação operacional.
+
+Resultados efetivamente executados no ambiente de desenvolvimento devem ser consultados em [VALIDATION.md](VALIDATION.md). O roteiro que ainda deve ser executado no computador alvo está em [WINDOWS-VALIDATION.md](WINDOWS-VALIDATION.md). Dados sintéticos aparecem somente na suíte de testes; não são exibidos como hardware real pela aplicação.
+
+| Etapa/módulo | Código entregue | Verificação disponível no Linux | Validação Windows e trabalho restante |
+| --- | --- | --- | --- |
+| 1 — Fundação | Solução modular .NET 10, WPF/MVVM, backend separado, estados/metadados, SQLite e logs. | Compilação, contratos, serialização e persistência. | Inicialização, UAC, responsividade, layouts e pacote portátil na máquina alvo. Installer/assinatura pendentes. |
+| 2 — Hardware/telemetria | Descoberta WMI/Win32, CPU total/lógica/processos, RAM/commit/paginação, I/O de discos, rede, NVML e gráficos. | Compilação e respostas `Unsupported`/nulas fora do Windows; qualidade de taxas e cancelamento em testes. | Conferir fontes/precisão e overhead com PerfMon, Task Manager, vídeo e NVML. CPU térmica/clock efetivo, SPD/timings/canais e SMART NVMe pendentes. |
+| 3 — DPC/ISR | Captura kernel manual limitada, auxiliar elevado, importação ETL, estatística, timeline/buckets e atribuição por imagem kernel observada. | Agregação, unidades, amostras incompletas, mapa de módulos e contratos. | Captura real, perdas/limpeza e comparação com WPA. Stacks, scheduling de threads e correlação com frametime pendentes. |
+| 4 — Rede | Adaptadores reais, NetAdapter, valores suportados, guias informativos, ping/jitter/p95 manual. | Estatística ICMP, lacunas e validação de parâmetros. | Driver I219-V real, PowerShell localizado, teste autorizado e propriedade/restauração. Latência sob carga e inventário adicional de energia pendentes. |
+| 5 — Jogos | CLI PresentMon inspecionada, captura manual/PID, parser 1.x/2.x/3.x, separação por stream/segmento, frames descartados e estatísticas. | Parser de CSV, unidades, limites, FPS/lows/percentis e dados ausentes. | Executável real, aplicação gráfica real, ciclo de cancelamento e políticas de VALORANT/Vanguard. Correlação com telemetria/ETW pendente. |
+| 6 — Triagem | CPU sustentada, RAM disponível baixa com commit alto, contexto da plataforma DDR e dados insuficientes; evidência/confiança/verificação. | Regras com dados de teste e proteção contra conclusões sem amostra. | Interpretar cenários reais. Baseline por hardware, investigação causal e catálogo amplo de regras pendentes. |
+| 7 — Alterações reversíveis | Plano de energia existente e propriedade escalar de adaptador; pré-visualização, backup durável, releitura, restauração/conflictos. | Operações falsas: ordem do backup, falhas, cancelamento e valores conflitantes sem mudar o sistema. | Provar operação única autorizada, UAC, persistência/ativação e recuperação na máquina alvo. Demais otimizações não estão implementadas. |
+| 8 — Testes/comparação | CPU single-worker 5 s, RAM 32 MiB, leitura existente até 64 MiB, comparação por média/p95/n e condições. | Cálculos, valores ausentes e comparação de metadados/condições; nenhum benchmark automático. | Progresso/cancelamento/custo reais e protocolo antes/depois repetido. Multithread, GPU/stress, gravação e rede sob carga pendentes. |
+| 8 — Histórico/relatórios | Sessão completa SQLite/WAL, diário associado à janela, JSON/CSV/HTML com valores originais/resultados/restauração, cópia anonimizada, logs rotativos e exportação atômica. | Round-trip exato de métricas/alterações, concorrência, SQL parametrizado, privacidade, escaping e cultura invariável. | Banco sem acesso/espaço na UI e revisão de exportação real. Unificar artefatos avançados/comparações em relatório de investigação pendente; alterações já incluídas. |
+| 9 — Entrega | Publicação Windows x64 autossuficiente com auxiliar, scripts e documentação. | Compilação/pacote e suíte registradas em VALIDATION. | Executar roteiro de aceitação Windows. Não há garantia de suporte oficial ao Windows 10 Pro 22H2 regular nem validação Vanguard. |
+
+## Escopo da interpretação atual
+
+O motor implementa **triagem limitada**, não um diagnóstico completo de todas as causas de perda de FPS. Um lógico de CPU persistentemente ocupado é uma evidência para investigar; sem scheduling ETW e frames sincronizados, não identifica a thread crítica do jogo. RAM com pouca disponibilidade e commit alto mostra uma condição observada, sem atribuir stuttering automaticamente ao pagefile. Uma janela sem alerta significa que essas regras não encontraram evidência suficiente, não que todo o hardware está certificado.
+
+Não há recomendação automática de overclock, clocks/voltagens/power limits, limpeza de RAM, desativação de pagefile/RSS, reset global de rede ou alterações genéricas de Registro. RAM nominal 3600 MT/s operando a 2933 MT/s no contexto B460/i7-10700K não é tratada automaticamente como defeito.
+
+## Prioridade seguinte
+
+1. Executar a aceitação no Windows 10 Pro 22H2 x64 informado, registrando também a limitação de ciclo de vida do sistema e do .NET 10. Confirmar inicialização e fontes essenciais antes de qualquer alteração.
+2. Validar DPC/ISR em carga conhecida e PresentMon em aplicação permitida, incluindo perdas, timestamps e limpeza de sessões próprias. Medir custo da própria ferramenta.
+3. Implementar um protocolo de alinhamento temporal e correlação de frames/telemetria/ETW com incerteza explícita, seguido de scheduling de threads.
+4. Ampliar sensores apenas por APIs/provedores reais suportados, mantendo indisponibilidade explícita e evitando instalação de driver kernel próprio.
+5. Refinar baseline/regras com datasets de referência e repetições controladas; depois integrar relatórios avançados e concluir instalador/assinatura.

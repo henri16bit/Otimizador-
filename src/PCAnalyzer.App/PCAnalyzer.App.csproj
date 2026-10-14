@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>PCAnalyzer</AssemblyName>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PCAnalyzer.Core/PCAnalyzer.Core.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Hardware/PCAnalyzer.Hardware.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Diagnostics/PCAnalyzer.Diagnostics.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Gaming/PCAnalyzer.Gaming.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Network/PCAnalyzer.Network.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Optimization/PCAnalyzer.Optimization.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Storage/PCAnalyzer.Storage.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Reports/PCAnalyzer.Reports.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Worker/PCAnalyzer.Worker.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <Target Name="CopyPrivilegedWorker" AfterTargets="Build">
+    <ItemGroup>
+      <WorkerFiles Include="../PCAnalyzer.Worker/bin/$(Configuration)/net10.0/win-x64/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WorkerFiles)" DestinationFiles="@(WorkerFiles->'$(TargetDir)worker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

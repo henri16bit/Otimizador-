@@ -1,0 +1,42 @@
+name: Build and portable tests
+"on": [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests/package_tests -v
+      - run: dotnet restore PCAnalyzer.sln --locked-mode
+      - run: dotnet build PCAnalyzer.sln -c Release --no-restore -warnaserror
+      - run: dotnet test tests/PCAnalyzer.Tests/PCAnalyzer.Tests.csproj -c Release --no-build --no-restore --logger trx
+      - if: runner.os == 'Windows'
+        run: dotnet run --project src/PCAnalyzer.Verify/PCAnalyzer.Verify.csproj -c Release --no-build --no-restore -- --output artifacts/windows-verification
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/publish.ps1
+      - if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: artifacts/windows-x64/
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-${{ runner.os }}
+          path: |
+            tests/PCAnalyzer.Tests/TestResults/*.trx
+            artifacts/windows-verification/**/validation-result.json
+          if-no-files-found: warn

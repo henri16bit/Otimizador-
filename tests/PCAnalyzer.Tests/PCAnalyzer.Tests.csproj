@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5"><PrivateAssets>all</PrivateAssets></PackageReference>
+    <Using Include="Xunit" />
+    <ProjectReference Include="../../src/PCAnalyzer.Core/PCAnalyzer.Core.csproj" />
+    <ProjectReference Include="../../src/PCAnalyzer.Hardware/PCAnalyzer.Hardware.csproj" />
+    <ProjectReference Include="../../src/PCAnalyzer.Diagnostics/PCAnalyzer.Diagnostics.csproj" />
+    <ProjectReference Include="../../src/PCAnalyzer.Gaming/PCAnalyzer.Gaming.csproj" />
+    <ProjectReference Include="../../src/PCAnalyzer.Network/PCAnalyzer.Network.csproj" />
+    <ProjectReference Include="../../src/PCAnalyzer.Optimization/PCAnalyzer.Optimization.csproj" />
+    <ProjectReference Include="../../src/PCAnalyzer.Storage/PCAnalyzer.Storage.csproj" />
+    <ProjectReference Include="../../src/PCAnalyzer.Reports/PCAnalyzer.Reports.csproj" />
+  </ItemGroup>
+</Project>

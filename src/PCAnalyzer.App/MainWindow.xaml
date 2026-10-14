@@ -1,0 +1,307 @@
+<Window x:Class="PCAnalyzer.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:PCAnalyzer.App.Controls"
+        Title="PC Performance Analyzer" Width="1490" Height="960" MinWidth="1130" MinHeight="720"
+        WindowStartupLocation="CenterScreen" Closing="OnClosing">
+    <Grid Margin="18">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid Grid.Row="0" Margin="0,0,0,15">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="PC PERFORMANCE ANALYZER" FontSize="23" FontWeight="SemiBold"/>
+                <TextBlock Text="Coletar → analisar evidências → medir novamente → comparar" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
+                <TextBlock Text="{Binding ViewContext}" Foreground="{StaticResource Accent}" Margin="0,7,0,0"/>
+            </StackPanel>
+            <WrapPanel Grid.Column="1" VerticalAlignment="Center">
+                <Button Content="{Binding PauseCaption}" Command="{Binding PauseCommand}"/>
+                <Button Content="Voltar ao vivo" Command="{Binding LiveCommand}"/>
+                <Button Content="Salvar sessão" Command="{Binding SaveCommand}"/>
+                <Button Content="Nova sessão" Command="{Binding NewSessionCommand}" ToolTip="Salva a janela atual antes de iniciar outra."/>
+            </WrapPanel>
+        </Grid>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="174"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="340"/></Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Background="{StaticResource Surface}" CornerRadius="6">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Bottom" Margin="12">
+                        <TextBlock Text="LOCAL · SEM CONTA" FontSize="10" Foreground="{StaticResource Accent}"/>
+                        <TextBlock Text="Coleta passiva por padrão. Ações profundas são manuais." Style="{StaticResource Note}" Margin="0,7,0,0"/>
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Sections}" SelectedItem="{Binding SelectedSection}" DisplayMemberPath="Name" Margin="0,8,0,0"/>
+                </DockPanel>
+            </Border>
+            <TabControl Grid.Column="2" SelectedIndex="{Binding ContentTab}">
+                <TabItem Header="Telemetria">
+                    <Grid Margin="12">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="190"/><RowDefinition Height="Auto"/><RowDefinition Height="2*"/><RowDefinition Height="Auto"/><RowDefinition Height="1.2*"/></Grid.RowDefinitions>
+                        <DockPanel Grid.Row="0">
+                            <TextBlock Text="{Binding SelectedSection.Name}" FontSize="19" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8"/>
+                            <TextBox Text="{Binding MetricFilter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Filtrar pelo nome da métrica ou fonte" Width="245" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Border Grid.Row="1" BorderBrush="#34495B" BorderThickness="1" CornerRadius="4">
+                            <DockPanel><TextBlock DockPanel.Dock="Top" Text="{Binding SelectedMetric.Name, TargetNullValue=Selecione uma métrica}" Foreground="{StaticResource Accent}" Margin="10,7,0,0"/><controls:TimeSeriesChart Samples="{Binding ChartSamples}"/></DockPanel>
+                        </Border>
+                        <TextBlock Grid.Row="2" Text="Métricas reais · selecione uma linha para investigar o histórico" Style="{StaticResource Note}" Margin="0,12,0,6"/>
+                        <DataGrid Grid.Row="3" ItemsSource="{Binding Metrics}" SelectedItem="{Binding SelectedMetric}" HorizontalScrollBarVisibility="Auto">
+                            <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="ToolTip" Value="{Binding Details}"/></Style></DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Métrica" Binding="{Binding Name}" Width="220"/>
+                                <DataGridTextColumn Header="Valor" Binding="{Binding Value}" Width="85"/>
+                                <DataGridTextColumn Header="Unidade" Binding="{Binding Unit}" Width="65"/>
+                                <DataGridTextColumn Header="Estado" Binding="{Binding State}" Width="150"/>
+                                <DataGridTextColumn Header="Intervalo" Binding="{Binding Cadence}" Width="75"/>
+                                <DataGridTextColumn Header="Timestamp" Binding="{Binding Time}" Width="105"/>
+                                <DataGridTextColumn Header="Origem" Binding="{Binding Source}" Width="200"/>
+                                <DataGridTextColumn Header="Método / limitações" Binding="{Binding Details}" Width="360"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <StackPanel Grid.Row="4" Margin="0,10,0,6">
+                            <TextBlock Text="Inventário do componente · disponibilidade e origem preservadas" Foreground="{StaticResource Muted}"/>
+                            <TextBlock Text="{Binding SelectedMetric.Details}" TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,5,0,0" MaxHeight="42"/>
+                        </StackPanel>
+                        <DataGrid Grid.Row="5" ItemsSource="{Binding Hardware}" HorizontalScrollBarVisibility="Auto">
+                            <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="ToolTip" Value="{Binding Limitation}"/></Style></DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Componente" Binding="{Binding Component}" Width="170"/>
+                                <DataGridTextColumn Header="Informação" Binding="{Binding Name}" Width="155"/>
+                                <DataGridTextColumn Header="Valor reportado" Binding="{Binding Value}" Width="230"/>
+                                <DataGridTextColumn Header="Estado" Binding="{Binding State}" Width="150"/>
+                                <DataGridTextColumn Header="Fonte" Binding="{Binding Source}" Width="190"/>
+                                <DataGridTextColumn Header="Limitação" Binding="{Binding Limitation}" Width="320"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </TabItem>
+                <TabItem Header="Processos">
+                    <DockPanel Margin="14">
+                        <StackPanel DockPanel.Dock="Top">
+                            <TextBlock Text="Processos / Windows" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <TextBlock Text="CPU é derivada do tempo de execução entre amostras, normalizada pela capacidade total. Working set é memória residente; não equivale ao commit privado. Ausência de permissão permanece visível." Style="{StaticResource Note}"/>
+                            <TextBlock Text="Selecione um processo para a captura manual de frames na aba Ferramentas. A lista é somente ao vivo e não faz parte das sessões históricas." Style="{StaticResource Note}"/>
+                        </StackPanel>
+                        <DataGrid ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="PID" Binding="{Binding Id}" Width="80"/>
+                                <DataGridTextColumn Header="Processo" Binding="{Binding Name}" Width="*"/>
+                                <DataGridTextColumn Header="CPU" Binding="{Binding Cpu}" Width="110"/>
+                                <DataGridTextColumn Header="Working set" Binding="{Binding Memory}" Width="140"/>
+                                <DataGridTextColumn Header="Limitação" Binding="{Binding Limitation}" Width="180"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+                <TabItem Header="Ferramentas">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="14">
+                            <TextBlock Text="Investigações e testes manuais" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <TextBlock Text="Os resultados aparecem no painel técnico à direita. Nenhuma destas operações inicia ao abrir o aplicativo." Style="{StaticResource Note}"/>
+                            <GroupBox Header="Rede · teste de ping">
+                                <StackPanel>
+                                    <TextBlock Text="Informe um hostname, IP ou a palavra gateway para o gateway local. O teste gera tráfego ICMP; RTT não mede o atraso físico de entrada nem prova latência do servidor do jogo." Style="{StaticResource Note}"/>
+                                    <DockPanel><Button DockPanel.Dock="Right" Content="Executar ping" Command="{Binding PingCommand}"/><TextBox Text="{Binding PingHost, UpdateSourceTrigger=PropertyChanged}" ToolTip="Hostname ou endereço do destino; sem comandos"/></DockPanel>
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="DPC / ISR · ETW de kernel">
+                                <StackPanel>
+                                    <TextBlock Text="Captura explícita de 30 segundos com elevação pontual pelo Windows. Analisa eventos realmente presentes no ETL. Falhas de ferramenta, permissão ou resolução de módulo são reportadas. Não representa input lag." Style="{StaticResource Note}"/>
+                                    <WrapPanel><Button Content="Capturar 30 s…" Command="{Binding CaptureDpcCommand}"/><Button Content="Importar ETL…" Command="{Binding ImportEtlCommand}"/></WrapPanel>
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="GameSession · PresentMon opcional">
+                                <StackPanel>
+                                    <TextBlock Text="Importe uma captura CSV real ou selecione o executável oficial do PresentMon e um PID. A captura externa é limitada a 30 s; não injeta código nem cria overlay. Compatibilidade com Vanguard e permissão dependem do ambiente; importação offline é o caminho inicial recomendado." Style="{StaticResource Note}"/>
+                                    <DockPanel><TextBlock DockPanel.Dock="Left" Text="PID alvo" VerticalAlignment="Center" Margin="0,0,10,8"/><TextBox Text="{Binding ProcessIdText, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left"/></DockPanel>
+                                    <WrapPanel><Button Content="Importar CSV…" Command="{Binding ImportFramesCommand}"/><Button Content="Capturar frames 30 s…" Command="{Binding CaptureFramesCommand}"/></WrapPanel>
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="Test Lab · limites conservadores">
+                                <StackPanel>
+                                    <TextBlock Text="Cada botão abre uma confirmação com objetivo, limites e consumo esperado. CPU pode aumentar temperatura/consumo. RAM usa um buffer limitado e não valida integridade física. Leitura usa arquivo existente e pode refletir cache do Windows. Não há benchmark de escrita nem carga GPU automatizada nesta versão." Style="{StaticResource Note}"/>
+                                    <WrapPanel><Button Content="CPU · uma thread…" Command="{Binding CpuSingleCommand}"/><Button Content="RAM · 32 MiB…" Command="{Binding MemoryCommand}"/><Button Content="Disco · leitura 64 MiB…" Command="{Binding DiskReadCommand}"/></WrapPanel>
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="Latency Analysis · interpretação">
+                                <StackPanel>
+                                    <TextBlock Text="Medição direta: contadores/APIs, eventos DPC/ISR, RTT ICMP e intervalos de apresentação presentes na captura." Style="{StaticResource Note}"/>
+                                    <TextBlock Text="Indicadores derivados: percentis, média, jitter e taxas entre amostras. Sua definição e fonte acompanham o resultado." Style="{StaticResource Note}"/>
+                                    <TextBlock Text="Suspeita fundamentada: recomendações com evidência e confiança no painel à direita. Correlação temporal isolada não estabelece causalidade." Style="{StaticResource Note}"/>
+                                    <TextBlock Text="Não mensurável aqui: clique-para-fóton, input lag físico total e polling real de dispositivos sem instrumentação apropriada." Style="{StaticResource Note}"/>
+                                </StackPanel>
+                            </GroupBox>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+                <TabItem Header="Alterações">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="14">
+                            <TextBlock Text="Otimizações reversíveis" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <TextBlock Text="Leia o estado atual, compare a pré-visualização e confirme individualmente. Um possível benefício requer nova medição em condições semelhantes." Style="{StaticResource Note}"/>
+                            <Button Content="Ler planos, propriedades e histórico" Command="{Binding RefreshOptimizationCommand}" HorizontalAlignment="Left"/>
+                            <GroupBox Header="Plano de energia">
+                                <StackPanel><ComboBox ItemsSource="{Binding PowerPlans}" SelectedItem="{Binding SelectedPowerPlan}" DisplayMemberPath="Name"/>
+                                    <Button Content="Pré-visualizar e confirmar…" Command="{Binding PowerPreviewCommand}" HorizontalAlignment="Left"/>
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="Propriedade suportada do adaptador de rede">
+                                <StackPanel>
+                                    <ComboBox ItemsSource="{Binding NetworkSettings}" SelectedItem="{Binding SelectedNetworkSetting}">
+                                        <ComboBox.ItemTemplate><DataTemplate><TextBlock><Run Text="{Binding AdapterName}"/><Run Text=" · "/><Run Text="{Binding Name}"/></TextBlock></DataTemplate></ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <TextBlock Text="{Binding SelectedNetworkSetting.Keyword}" Foreground="{StaticResource Accent}"/>
+                                    <TextBlock Margin="0,5,0,7"><Run Text="Atual: "/><Run Text="{Binding SelectedNetworkSetting.CurrentValue}"/></TextBlock>
+                                    <TextBlock Text="{Binding SelectedNetworkSetting.Explanation}" Style="{StaticResource Note}"/>
+                                    <ComboBox ItemsSource="{Binding NetworkValues}" SelectedItem="{Binding SelectedNetworkValue}" DisplayMemberPath="Name"/>
+                                    <Button Content="Pré-visualizar e confirmar…" Command="{Binding NetworkPreviewCommand}" HorizontalAlignment="Left"/>
+                                </StackPanel>
+                            </GroupBox>
+                            <TextBlock Text="Journal de alterações · valores originais persistidos antes da escrita" Style="{StaticResource Note}"/>
+                            <DataGrid ItemsSource="{Binding Changes}" SelectedItem="{Binding SelectedChange}" Height="220" HorizontalScrollBarVisibility="Auto">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Data" Binding="{Binding CreatedAt, StringFormat={}{0:g}}" Width="145"/>
+                                    <DataGridTextColumn Header="Operação" Binding="{Binding Kind}" Width="120"/>
+                                    <DataGridTextColumn Header="Alvo" Binding="{Binding Target}" Width="220"/>
+                                    <DataGridTextColumn Header="Estado" Binding="{Binding State}" Width="110"/>
+                                    <DataGridTextColumn Header="Antes" Binding="{Binding Before}" Width="160"/>
+                                    <DataGridTextColumn Header="Depois" Binding="{Binding After}" Width="160"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <TextBlock Text="{Binding SelectedChange.Error}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            <TextBlock Text="{Binding SelectedChange.RecoveryInstructions}" Style="{StaticResource Note}" Margin="0,6,0,8"/>
+                            <Button Content="Restaurar alteração selecionada…" Command="{Binding RestoreCommand}" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+                <TabItem Header="Histórico">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="14">
+                            <TextBlock Text="Sessões e Performance Comparison" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <TextBlock Text="Nome da sessão" Foreground="{StaticResource Muted}"/>
+                            <TextBox Text="{Binding SessionLabel, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Text="Condição / carga de trabalho" Foreground="{StaticResource Muted}"/>
+                            <TextBox Text="{Binding Workload, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Text="Notas (configuração do jogo, duração, mudanças, contexto)" Foreground="{StaticResource Muted}"/>
+                            <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="65" TextWrapping="Wrap"/>
+                            <WrapPanel><Button Content="Salvar janela atual" Command="{Binding SaveCommand}"/><Button Content="Atualizar histórico" Command="{Binding RefreshHistoryCommand}"/><Button Content="Abrir selecionada" Command="{Binding LoadSessionCommand}"/></WrapPanel>
+                            <DataGrid ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}" Height="210" HorizontalScrollBarVisibility="Auto">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Sessão" Binding="{Binding Label}" Width="190"/>
+                                    <DataGridTextColumn Header="Início" Binding="{Binding StartedAt, StringFormat={}{0:g}}" Width="155"/>
+                                    <DataGridTextColumn Header="Amostras" Binding="{Binding SampleCount}" Width="85"/>
+                                    <DataGridTextColumn Header="Condição" Binding="{Binding Workload}" Width="220"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <GroupBox Header="Antes / depois" Margin="0,12,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="Selecione duas sessões. A comparação verifica contexto e cobertura; diferenças não provam efeito causal de uma otimização." Style="{StaticResource Note}"/>
+                                    <TextBlock Text="Antes" Foreground="{StaticResource Muted}"/>
+                                    <ComboBox ItemsSource="{Binding Sessions}" SelectedItem="{Binding BeforeSession}" DisplayMemberPath="Label"/>
+                                    <TextBlock Text="Depois" Foreground="{StaticResource Muted}"/>
+                                    <ComboBox ItemsSource="{Binding Sessions}" SelectedItem="{Binding AfterSession}" DisplayMemberPath="Label"/>
+                                    <Button Content="Comparar sessões" Command="{Binding CompareCommand}" HorizontalAlignment="Left"/>
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="Exportar a sessão visualizada (ou a janela ao vivo)">
+                                <StackPanel>
+                                    <CheckBox Content="Anonimizar identificadores e caminhos pessoais" IsChecked="{Binding Anonymize}"/>
+                                    <WrapPanel><Button Content="JSON…" Command="{Binding ExportJsonCommand}"/><Button Content="CSV…" Command="{Binding ExportCsvCommand}"/><Button Content="HTML local…" Command="{Binding ExportHtmlCommand}"/></WrapPanel>
+                                </StackPanel>
+                            </GroupBox>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+                <TabItem Header="Configuração">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="14">
+                            <TextBlock Text="Coleta e recursos do aplicativo" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                            <GroupBox Header="Perfil de amostragem">
+                                <StackPanel>
+                                    <TextBlock Text="Leve inicia em 5 s; Avançado inicia em 1 s. O perfil ajusta a frequência da telemetria passiva. Rastreamento profundo continua manual e limitado a 30 s." Style="{StaticResource Note}"/>
+                                    <ComboBox ItemsSource="{Binding CollectionModes}" SelectedItem="{Binding Mode}"/>
+                                    <TextBlock Text="Intervalo alvo (segundos)" Foreground="{StaticResource Muted}"/>
+                                    <ComboBox ItemsSource="{Binding Intervals}" SelectedItem="{Binding IntervalSeconds}"/>
+                                    <Button Content="Salvar preferências locais" Command="{Binding SavePreferencesCommand}" HorizontalAlignment="Left"/>
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="Limites e precisão">
+                                <StackPanel>
+                                    <TextBlock Text="Atualização visual limitada a 1 Hz e desacoplada da coleta. Quando minimizado, intervalo mínimo de 15 s e atualização visual suspensa. O tempo real entre medições acompanha cada amostra." Style="{StaticResource Note}"/>
+                                    <TextBlock Text="Buffer da sessão: até 30.000 amostras; gráfico: últimas 600 de uma métrica. Descartes são registrados nas notas do relatório. Sessões são gravadas em lote ao salvar, iniciar outra ou fechar normalmente." Style="{StaticResource Note}"/>
+                                    <TextBlock Text="{Binding BufferInfo}" Foreground="{StaticResource Accent}"/>
+                                    <TextBlock Text="Esta versão não instala drivers de sensores. Temperaturas de CPU, timings, canais e SMART não disponíveis ficam explícitos; não são estimados a partir de números de utilização." Style="{StaticResource Note}" Margin="0,9,0,9"/>
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="Armazenamento e permissões">
+                                <StackPanel>
+                                    <TextBlock Text="Dados e logs locais" Foreground="{StaticResource Muted}"/>
+                                    <TextBox Text="{Binding DataDirectory, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"/>
+                                    <TextBlock Text="A interface usa privilégios normais. Captura de kernel e alterações protegidas solicitam elevação pontual. Falhas de reversão mantêm o journal e instruções para recuperação; não são reportadas como sucesso." Style="{StaticResource Note}"/>
+                                    <TextBlock Text="Nenhuma carga de CPU/RAM, teste de rede, captura ETW ou PresentMon é iniciada automaticamente." Style="{StaticResource Note}"/>
+                                </StackPanel>
+                            </GroupBox>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+            <TabControl Grid.Column="4" SelectedIndex="{Binding ResultTab}">
+                <TabItem Header="Evidências">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <TextBlock Text="Diagnóstico contextual" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <TextBlock Text="Resultados conservadores. Dados ausentes ou fora de contexto limitam a confiança. Métricas isoladas não provam defeito." Style="{StaticResource Note}"/>
+                            <ListBox ItemsSource="{Binding Findings}" SelectedItem="{Binding SelectedFinding}" MaxHeight="190" Margin="0,0,0,10">
+                                <ListBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock FontSize="10" Foreground="{StaticResource Muted}"><Run Text="{Binding Component}"/><Run Text=" · "/><Run Text="{Binding Confidence}"/></TextBlock></StackPanel></DataTemplate></ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock Text="{Binding SelectedFinding.Title}" FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding SelectedFinding.Explanation}" Style="{StaticResource Note}"/>
+                            <TextBlock FontSize="11" Foreground="{StaticResource Accent}" TextWrapping="Wrap"><Run Text="{Binding SelectedFinding.Category}"/><Run Text=" · "/><Run Text="{Binding SelectedFinding.Severity}"/><Run Text=" · confiança "/><Run Text="{Binding SelectedFinding.Confidence}"/></TextBlock>
+                            <TextBlock Text="Evidências observadas" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                            <ItemsControl ItemsSource="{Binding SelectedFinding.Evidence}">
+                                <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="#34495B" BorderThickness="0,0,0,1" Padding="0,6"><StackPanel><TextBlock Text="{Binding Description}" TextWrapping="Wrap"/><TextBlock Text="{Binding Source}" Foreground="{StaticResource Muted}" FontSize="10" TextWrapping="Wrap"/><TextBlock Foreground="{StaticResource Muted}" FontSize="10"><Run Text="{Binding Value, StringFormat={}{0:0.###}}"/><Run Text=" "/><Run Text="{Binding Unit}"/><Run Text=" · "/><Run Text="{Binding Timestamp, StringFormat={}{0:HH:mm:ss}}"/></TextBlock></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="Recomendação / verificação" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                            <TextBlock Text="{Binding SelectedFinding.Recommendation}" Style="{StaticResource Note}"/>
+                            <TextBlock Text="{Binding SelectedFinding.Verification}" Style="{StaticResource Note}"/>
+                            <TextBlock Text="{Binding SelectedFinding.ExpectedImpact}" Style="{StaticResource Note}"/>
+                            <TextBlock Text="{Binding SelectedFinding.Requirements}" Style="{StaticResource Note}"/>
+                            <TextBlock Text="Reversão / contexto" FontWeight="SemiBold" Margin="0,8,0,6"/>
+                            <TextBlock Text="{Binding SelectedFinding.Reversal}" Style="{StaticResource Note}"/>
+                            <TextBlock Text="{Binding SelectedFinding.Context}" Style="{StaticResource Note}"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+                <TabItem Header="Resultado">
+                    <DockPanel Margin="12">
+                        <StackPanel DockPanel.Dock="Top">
+                            <TextBlock Text="{Binding OperationTitle}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                            <StackPanel Visibility="{Binding HasRelativeSeries, Converter={StaticResource BooleanVisibility}}">
+                                <ComboBox ItemsSource="{Binding ResultSeries}" SelectedItem="{Binding SelectedRelativeSeries}" DisplayMemberPath="Name"/>
+                                <controls:RelativeTimeSeriesChart Series="{Binding SelectedRelativeSeries}" Height="180"/>
+                                <TextBlock Text="{Binding SelectedRelativeSeries.TimeBasis}" Style="{StaticResource Note}" FontSize="10" Margin="0,7,0,3"/>
+                                <TextBlock Text="{Binding SelectedRelativeSeries.Source}" Style="{StaticResource Note}" FontSize="10"/>
+                                <TextBlock Text="Últimos 10.000 frames da série selecionada. A curva preserva mínimos/máximos por bloco para exibição; estatísticas usam os dados da captura. Sem correlação UTC automática." Style="{StaticResource Note}" FontSize="10"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <TextBox Text="{Binding OperationText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" Margin="0"/>
+                    </DockPanel>
+                </TabItem>
+                <TabItem Header="Fontes">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <TextBlock Text="Disponibilidade detectada" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <ItemsControl ItemsSource="{Binding Capabilities}">
+                                <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="#34495B" BorderThickness="0,0,0,1" Padding="0,9"><StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Status, Converter={StaticResource AvailabilityLabel}}" Foreground="{StaticResource Accent}" Margin="0,4"/><TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" Margin="0"/></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+        </Grid>
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="200"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel><TextBlock Text="{Binding Status}" TextWrapping="Wrap"/><TextBlock Text="{Binding BufferInfo}" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,3,0,0"/></StackPanel>
+            <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Progress}" Height="8" VerticalAlignment="Center" Margin="10" Foreground="{StaticResource Accent}"/>
+            <Button Grid.Column="2" Content="Cancelar operação" Command="{Binding CancelCommand}" Margin="8,0,0,0"/>
+        </Grid>
+    </Grid>
+</Window>

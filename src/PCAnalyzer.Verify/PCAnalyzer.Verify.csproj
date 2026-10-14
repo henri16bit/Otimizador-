@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PCAnalyzer.Core/PCAnalyzer.Core.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Hardware/PCAnalyzer.Hardware.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Storage/PCAnalyzer.Storage.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Reports/PCAnalyzer.Reports.csproj" />
+  </ItemGroup>
+</Project>

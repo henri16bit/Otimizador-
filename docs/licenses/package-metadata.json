@@ -1,0 +1,187 @@
+[
+  {
+    "id": "Microsoft.Data.Sqlite",
+    "version": "10.0.13",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://docs.microsoft.com/dotnet/standard/data/sqlite/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "Microsoft.Data.Sqlite.Core",
+    "version": "10.0.13",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://docs.microsoft.com/dotnet/standard/data/sqlite/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "Microsoft.Diagnostics.NETCore.Client",
+    "version": "0.2.510501",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://github.com/dotnet/diagnostics",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "Microsoft.Diagnostics.Tracing.TraceEvent",
+    "version": "3.2.8",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://github.com/Microsoft/perfview",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "Microsoft.Extensions.DependencyInjection",
+    "version": "6.0.0",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+    "version": "6.0.0",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "Microsoft.Extensions.Logging",
+    "version": "6.0.0",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "Microsoft.Extensions.Logging.Abstractions",
+    "version": "6.0.0",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "Microsoft.Extensions.Options",
+    "version": "6.0.0",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "Microsoft.Extensions.Primitives",
+    "version": "6.0.0",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "SQLitePCLRaw.bundle_e_sqlite3",
+    "version": "2.1.13",
+    "authors": "Eric Sink",
+    "license": "Apache-2.0",
+    "licenseUrl": "https://licenses.nuget.org/Apache-2.0",
+    "copyright": "Copyright 2014-2024 SourceGear, LLC"
+  },
+  {
+    "id": "SQLitePCLRaw.core",
+    "version": "2.1.13",
+    "authors": "Eric Sink",
+    "license": "Apache-2.0",
+    "licenseUrl": "https://licenses.nuget.org/Apache-2.0",
+    "copyright": "Copyright 2014-2024 SourceGear, LLC"
+  },
+  {
+    "id": "SQLitePCLRaw.lib.e_sqlite3",
+    "version": "2.1.13",
+    "authors": "Eric Sink",
+    "license": "Apache-2.0",
+    "licenseUrl": "https://licenses.nuget.org/Apache-2.0",
+    "copyright": "Copyright 2014-2024 SourceGear, LLC"
+  },
+  {
+    "id": "SQLitePCLRaw.provider.e_sqlite3",
+    "version": "2.1.13",
+    "authors": "Eric Sink",
+    "license": "Apache-2.0",
+    "licenseUrl": "https://licenses.nuget.org/Apache-2.0",
+    "copyright": "Copyright 2014-2024 SourceGear, LLC"
+  },
+  {
+    "id": "System.CodeDom",
+    "version": "10.0.13",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "System.Configuration.ConfigurationManager",
+    "version": "10.0.13",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "System.Diagnostics.EventLog",
+    "version": "10.0.13",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "System.Diagnostics.PerformanceCounter",
+    "version": "10.0.13",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "System.Management",
+    "version": "10.0.13",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "System.Reflection.TypeExtensions",
+    "version": "4.7.0",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://github.com/dotnet/corefx",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  },
+  {
+    "id": "System.Security.Cryptography.ProtectedData",
+    "version": "10.0.13",
+    "authors": "Microsoft",
+    "license": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "projectUrl": "https://dot.net/",
+    "copyright": "© Microsoft Corporation. All rights reserved."
+  }
+]

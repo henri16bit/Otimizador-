@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PCAnalyzer.Core/PCAnalyzer.Core.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Diagnostics/PCAnalyzer.Diagnostics.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Network/PCAnalyzer.Network.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Optimization/PCAnalyzer.Optimization.csproj" />
+  </ItemGroup>
+</Project>

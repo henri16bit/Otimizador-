@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../PCAnalyzer.Core/PCAnalyzer.Core.csproj" />
+    <PackageReference Include="System.Management" Version="10.0.13" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.13" />
+  </ItemGroup>
+</Project>

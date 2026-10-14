@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../PCAnalyzer.Core/PCAnalyzer.Core.csproj" />
+    <ProjectReference Include="../PCAnalyzer.Network/PCAnalyzer.Network.csproj" />
+  </ItemGroup>
+</Project>
