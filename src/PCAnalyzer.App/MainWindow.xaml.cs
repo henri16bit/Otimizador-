@@ -8,11 +8,11 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private bool _canClose;
-    public MainWindow(MainViewModel viewModel)
+    public MainWindow(MainViewModel viewModel, bool initializeHardware = true)
     {
         InitializeComponent();
         _viewModel = viewModel; DataContext = viewModel;
-        Loaded += async (_, _) => await viewModel.InitializeAsync();
+        if (initializeHardware) Loaded += async (_, _) => await viewModel.InitializeAsync();
         StateChanged += (_, _) => viewModel.IsMinimized = WindowState == WindowState.Minimized;
     }
     private async void OnClosing(object? sender, CancelEventArgs args)

@@ -10,4 +10,8 @@ O pacote é portátil e inclui o runtime .NET. A abertura inicia coleta passiva;
 
 Esta é uma prévia: a execução da interface e as integrações no computador Windows ainda precisam de validação local. O Windows 10 Pro 22H2 solicitado é um alvo de compatibilidade técnica pendente; consulte o README sobre o suporte do .NET 10. O executável ainda não tem assinatura digital.
 
-O processo de publicação exige compilação sem avisos, testes automatizados e verificação do conteúdo do ZIP. O arquivo `.sha256` permite conferir o download com `Get-FileHash .\PCAnalyzer-windows-x64.zip -Algorithm SHA256` no PowerShell. Consulte `docs/WINDOWS-VALIDATION.md` no pacote para a validação local.
+O processo de publicação exige compilação sem avisos, testes automatizados, verificação do conteúdo do ZIP e abertura da janela WPF no runner Windows, passando por suas seis abas sem iniciar coleta de hardware. Esse teste não substitui a validação no seu computador.
+
+Se a abertura falhar, as falhas gerenciadas exibem uma mensagem e salvam os detalhes em `%LOCALAPPDATA%\PCAnalyzer\logs\startup-last-error.txt` (ou na pasta temporária, caso a primeira pasta não seja gravável).
+
+O arquivo `.sha256` permite conferir o download com `Get-FileHash .\PCAnalyzer-windows-x64.zip -Algorithm SHA256` no PowerShell. Consulte `docs/WINDOWS-VALIDATION.md` no pacote para a validação local.

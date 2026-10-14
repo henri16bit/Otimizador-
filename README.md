@@ -56,7 +56,9 @@ No ambiente Codex cloud, use o checkout existente em `/workspace`: cada tarefa j
 
 Os testes de empacotamento podem ser executados com `python -m unittest discover -s tests/package_tests -v`. A CI conserva os resultados das suítes e realiza a verificação passiva no runner Windows; sensores do computador alvo e compatibilidade Vanguard continuam exigindo validação local.
 
-Tags `v*` acionam o workflow `Publish Windows release`, que compila, testa e publica o ZIP e seu SHA256 no GitHub Releases como prévia. Uma versão só se torna pública depois do envio dos dois arquivos; versões já publicadas não são sobrescritas.
+Tags `v*` acionam o workflow `Publish Windows release`, que compila, testa, abre a janela WPF no Windows e publica o ZIP e seu SHA256 no GitHub Releases como prévia. Uma nova versão só se torna pública depois do envio dos dois arquivos. Versões criadas manualmente que tenham somente os arquivos-fonte também podem receber o pacote; binários já publicados são preservados. O resultado é registrado em `refs/notes/pcanalyzer-releases` para permitir verificação por Git quando a API estiver indisponível.
+
+Se o aplicativo encerrar ao abrir, consulte `%LOCALAPPDATA%\PCAnalyzer\logs\startup-last-error.txt`. Falhas gerenciadas de inicialização passam a mostrar uma mensagem mesmo quando o carregamento dos recursos WPF falha. Problemas anteriores ao carregamento do .NET podem ser investigados com `DOTNET_HOST_TRACE=1` e `DOTNET_HOST_TRACEFILE` apontando para um arquivo gravável; esses registros são locais e podem conter caminhos do computador.
 
 ## Uso inicial
 

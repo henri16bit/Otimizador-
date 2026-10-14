@@ -1,0 +1,71 @@
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+
+namespace PCAnalyzer.App.Services;
+
+/// <summary>Available before WPF resources or the application backend are initialized.</summary>
+internal sealed class StartupDiagnostics
+{
+    private readonly string _smokeOutput;
+    private int _failureReported;
+    public bool IsSmokeTest { get; }
+
+    public StartupDiagnostics(string[] arguments)
+    {
+        IsSmokeTest = arguments.Contains("--smoke-test", StringComparer.Ordinal);
+        var outputIndex = Array.IndexOf(arguments, "--smoke-output");
+        _smokeOutput = outputIndex >= 0 && outputIndex + 1 < arguments.Length
+            ? arguments[outputIndex + 1] : Path.Combine(Path.GetTempPath(), "PCAnalyzer-smoke-result.json");
+    }
+
+    public void ReportSmokeSuccess(int views) => WriteSmokeResult(new
+    {
+        success = true, views, passiveHardwareStarted = false, timestamp = DateTimeOffset.UtcNow
+    });
+
+    public void ReportFailure(Exception exception)
+    {
+        if (Interlocked.Exchange(ref _failureReported, 1) != 0) return;
+        var detail = exception.ToString();
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrWhiteSpace(profile)) detail = detail.Replace(profile, "<user>", StringComparison.OrdinalIgnoreCase);
+        if (detail.Length > 16_384) detail = detail[..16_384];
+        string? reportPath = null;
+        foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Path.GetTempPath() })
+        {
+            if (string.IsNullOrWhiteSpace(root)) continue;
+            try
+            {
+                var directory = Path.Combine(root, "PCAnalyzer", "logs");
+                Directory.CreateDirectory(directory);
+                reportPath = Path.Combine(directory, "startup-last-error.txt");
+                File.WriteAllText(reportPath, $"{DateTimeOffset.UtcNow:O}\n{detail}\n", Encoding.UTF8);
+                break;
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        }
+        if (IsSmokeTest)
+        {
+            try { WriteSmokeResult(new { success = false, error = detail, timestamp = DateTimeOffset.UtcNow }); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+            return;
+        }
+        var message = "O PC Performance Analyzer não conseguiu iniciar ou encontrou uma falha fatal.\n\n" +
+            exception.GetType().Name + $" (0x{exception.HResult:X8})\n\n" +
+            (reportPath is null ? "Não foi possível salvar o registro de diagnóstico." : "Detalhes salvos em:\n" + reportPath);
+        // A native message box still works if WPF resource loading itself failed.
+        MessageBoxW(IntPtr.Zero, message, "PC Performance Analyzer — falha de inicialização", 0x10);
+    }
+
+    private void WriteSmokeResult(object result)
+    {
+        var path = Path.GetFullPath(_smokeOutput);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(result), Encoding.UTF8);
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern int MessageBoxW(IntPtr window, string text, string caption, uint type);
+}
