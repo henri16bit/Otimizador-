@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using PCAnalyzer.App.ViewModels;
 
 namespace PCAnalyzer.App;
@@ -21,6 +23,24 @@ public partial class MainWindow : Window
         if (initializeHardware) Loaded += async (_, _) => await viewModel.InitializeAsync();
         StateChanged += (_, _) => viewModel.IsMinimized = WindowState == WindowState.Minimized;
     }
+    protected override void OnSourceInitialized(EventArgs args)
+    {
+        base.OnSourceInitialized(args);
+        try
+        {
+            var enabled = 1;
+            var handle = new WindowInteropHelper(this).Handle;
+            if (DwmSetWindowAttribute(handle, 20, ref enabled, sizeof(int)) < 0)
+                _ = DwmSetWindowAttribute(handle, 19, ref enabled, sizeof(int));
+        }
+        catch (DllNotFoundException) { } // Optional title-bar styling must not block startup.
+        catch (EntryPointNotFoundException) { }
+    }
+
+    [DllImport("dwmapi.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+
     private async void OnClosing(object? sender, CancelEventArgs args)
     {
         if (_canClose) return;

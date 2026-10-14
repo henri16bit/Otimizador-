@@ -80,7 +80,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private IReadOnlyList<MetricSample> _chartSamples = [];
     private IReadOnlyList<MetricSample> _overviewChartSamples = [];
     private string _processFilter = "";
-    private string _metricFilter = "", _sessionLabel = "Diagnóstico local", _workload = "Desktop em repouso / informar condição", _notes = "", _pingHost = "", _processIdText = "";
+    private string _metricFilter = "", _sessionLabel = "Diagnóstico local", _workload = "Desktop em repouso / informar condição", _notes = "", _pingHost = "gateway", _processIdText = "";
     private bool _anonymize = true;
 
     public MainViewModel(IApplicationBackend backend)
@@ -109,7 +109,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             InvestigationTab = parameter?.ToString() switch { "jogos" => 1, "drivers" => 2, "testes" => 3, _ => 0 };
             Navigate("investigar");
         });
-        SaveCommand = Command(SaveCurrentSessionAsync);
+        SaveCommand = Command(SaveCurrentSessionAsync, () => !IsHistoryView);
         RefreshHistoryCommand = Command(RefreshHistoryAsync);
         LoadSessionCommand = Command(LoadSessionAsync, () => SelectedSession is not null);
         CompareCommand = Command(CompareAsync, () => BeforeSession is not null && AfterSession is not null && BeforeSession.Id != AfterSession.Id);
@@ -132,7 +132,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         CancelCommand = new RelayCommand(() => _operation?.Cancel(), () => IsBusy);
         PauseCommand = new RelayCommand(() => { _paused = !_paused; Notify(nameof(PauseCaption)); Notify(nameof(CollectionStateLabel)); Status = _paused ? "Coleta pausada pelo usuário." : "Coleta passiva retomada."; }, () => _inventory is not null && _loadedSession is null);
         LiveCommand = new RelayCommand(() => { _loadedSession = null; Replace(Capabilities, _inventory?.Capabilities ?? []); NotifyViewState(); RefreshDisplay(); AnalyzeDisplay(); Status = "Visualização ao vivo. As leituras seguem o perfil de coleta selecionado."; }, () => _loadedSession is not null);
-        NewSessionCommand = Command(NewSessionAsync);
+        NewSessionCommand = Command(NewSessionAsync, () => !IsHistoryView);
         _uiTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => FlushUi(), Dispatcher.CurrentDispatcher);
         _uiTimer.Stop();
         Replace(OverviewCards, MetricPresentation.Overview([], null));
@@ -160,6 +160,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public string PageTitle => SelectedSection?.Name ?? "Visão geral";
     public string PageDescription => SelectedSection?.Description ?? "";
     public bool IsHistoryView => _loadedSession is not null;
+    public bool IsLiveView => _loadedSession is null;
     public string CollectionStateLabel => IsHistoryView ? "Sessão salva" : _inventory is null ? "Detectando hardware" : _paused ? "Coleta pausada" : "Ao vivo";
     public string MachineSummary => (_loadedSession?.Inventory ?? _inventory)?.Components.FirstOrDefault(c => c.Category == "CPU")?.Name ?? "Identificando os componentes do seu PC…";
     public string ProcessFilter { get => _processFilter; set { if (Set(ref _processFilter, value)) RefreshVisibleProcesses(); } }
@@ -260,8 +261,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     }
     private void NotifyViewState()
     {
-        Notify(nameof(ViewContext)); Notify(nameof(CollectionStateLabel)); Notify(nameof(IsHistoryView)); Notify(nameof(MachineSummary));
+        Notify(nameof(ViewContext)); Notify(nameof(CollectionStateLabel)); Notify(nameof(IsHistoryView)); Notify(nameof(IsLiveView)); Notify(nameof(MachineSummary));
         PauseCommand.Refresh(); LiveCommand.Refresh();
+        RefreshCommands();
     }
 
     private AsyncCommand Command(Func<Task> action, Func<bool>? canExecute = null) => new(() => RunOperationAsync(action), () => !IsBusy && _inventory is not null && (canExecute?.Invoke() ?? true));
