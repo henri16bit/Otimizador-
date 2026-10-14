@@ -1,0 +1,58 @@
+{
+  "tag": "v0.2.0-preview.2",
+  "timestamp": "2026-10-14T19:36:55.4332385+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/38624651148",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "package": "success",
+    "smoke": "success",
+    "publish": "success"
+  },
+  "startup": {
+    "success": true,
+    "views": 8,
+    "detailViews": 7,
+    "compactLayoutChecked": true,
+    "passiveHardwareStarted": false,
+    "timestamp": "2026-10-14T19:36:35.0106287+00:00"
+  },
+  "publication": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/henri16bit/Otimizador-/releases/assets/641440449",
+        "contentType": "application/zip",
+        "createdAt": "2026-10-14T19:36:43Z",
+        "digest": "sha256:cbe8352e42d6e25f46e1c36a2d1ea83200cc28ddcd0cb674acd6f77e96f64651",
+        "downloadCount": 0,
+        "id": "RA_kwDOVJq4M84mO5rB",
+        "label": "",
+        "name": "PCAnalyzer-windows-x64.zip",
+        "size": 148229589,
+        "state": "uploaded",
+        "updatedAt": "2026-10-14T19:36:49Z",
+        "url": "https://github.com/henri16bit/Otimizador-/releases/download/v0.2.0-preview.2/PCAnalyzer-windows-x64.zip"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/henri16bit/Otimizador-/releases/assets/641440448",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-10-14T19:36:43Z",
+        "digest": "sha256:c6e12445818e34e54dfa3101b9fb9de7739841468ffacac61f5a593a14847223",
+        "downloadCount": 0,
+        "id": "RA_kwDOVJq4M84mO5rA",
+        "label": "",
+        "name": "PCAnalyzer-windows-x64.zip.sha256",
+        "size": 94,
+        "state": "uploaded",
+        "updatedAt": "2026-10-14T19:36:44Z",
+        "url": "https://github.com/henri16bit/Otimizador-/releases/download/v0.2.0-preview.2/PCAnalyzer-windows-x64.zip.sha256"
+      }
+    ],
+    "isDraft": false,
+    "url": "https://github.com/henri16bit/Otimizador-/releases/tag/v0.2.0-preview.2"
+  }
+}
