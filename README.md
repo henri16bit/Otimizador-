@@ -17,6 +17,8 @@ Windows 10 Pro 22H2 encerrou o suporte regular em **14 de outubro de 2025**. Ess
 
 ## Obter e executar a publicação
 
+Baixe **PCAnalyzer-windows-x64.zip** em [Releases no GitHub](https://github.com/henri16bit/Otimizador-/releases). Abra a versão desejada e procure o ZIP na seção **Assets**. Os links “Source code” contêm somente o código-fonte. As primeiras versões são prévias para validação local.
+
 Extraia o pacote Windows x64 completo para uma pasta gravável e execute:
 
 ```powershell
@@ -53,6 +55,8 @@ Uma publicação completa é o caminho recomendado para validar operações que 
 No ambiente Codex cloud, use o checkout existente em `/workspace`: cada tarefa já é isolada, e não é necessário criar um worktree. O script de preparação reutilizável está em `scripts/setup.sh`; os comandos de instalação e validação não modificam a aplicação nem geram medições de hardware Windows no Linux.
 
 Os testes de empacotamento podem ser executados com `python -m unittest discover -s tests/package_tests -v`. A CI conserva os resultados das suítes e realiza a verificação passiva no runner Windows; sensores do computador alvo e compatibilidade Vanguard continuam exigindo validação local.
+
+Tags `v*` acionam o workflow `Publish Windows release`, que compila, testa e publica o ZIP e seu SHA256 no GitHub Releases como prévia. Uma versão só se torna pública depois do envio dos dois arquivos; versões já publicadas não são sobrescritas.
 
 ## Uso inicial
 
