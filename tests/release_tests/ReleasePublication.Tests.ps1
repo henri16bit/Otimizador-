@@ -60,6 +60,9 @@ try {
     try { & $publish -Tag v0.1.0-preview.2 } catch { $rejected = $_.Exception.Message -match 'enviar' }
     Assert $rejected 'Upload failure must abort publication.'
     Assert (@($global:pcanalyzerReleaseTestState.calls | Where-Object { $_ -match '^release edit' }).Count -eq 0) 'Failed upload must never publish the draft.'
+    # GitHub Actions exits with LASTEXITCODE after the script. The final case deliberately
+    # simulates a failing gh process; the test itself succeeded and must return zero.
+    $global:LASTEXITCODE = 0
     Write-Host 'Five isolated release publication checks passed.'
 } finally {
     Set-Location $original

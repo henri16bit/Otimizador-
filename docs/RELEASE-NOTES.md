@@ -1,5 +1,7 @@
 # PC Performance Analyzer — prévia para Windows x64
 
+Correção da inicialização: a barra de progresso agora recebe o valor em uma única direção. A ligação anterior herdava o modo de escrita do WPF e tentava atualizar uma propriedade com setter privado, causando uma exceção ao construir a janela.
+
 Baixe **PCAnalyzer-windows-x64.zip** na seção **Assets** abaixo. Os arquivos automáticos “Source code” contêm apenas o código-fonte.
 
 1. Extraia o ZIP completo para uma pasta gravável.
