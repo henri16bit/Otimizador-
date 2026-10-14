@@ -1,0 +1,21 @@
+{
+  "tag": "v0.2.0-preview.1",
+  "timestamp": "2026-10-14T19:26:20.0573529+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/38623173282",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "package": "success",
+    "smoke": "failure",
+    "publish": "skipped"
+  },
+  "startup": {
+    "success": false,
+    "error": "System.InvalidOperationException: A TwoWay or OneWayToSource binding cannot work on the read-only property 'SelectedFindingConfidence' of type 'PCAnalyzer.App.ViewModels.MainViewModel'.\r\n   at MS.Internal.Data.PropertyPathWorker.CheckReadOnly(Object item, Object info)\r\n   at MS.Internal.Data.PropertyPathWorker.ReplaceItem(Int32 k, Object newO, Object parent)\r\n   at MS.Internal.Data.PropertyPathWorker.UpdateSourceValueState(Int32 k, ICollectionView collectionView, Object newValue, Boolean isASubPropertyChange)\r\n   at MS.Internal.Data.ClrBindingWorker.AttachDataItem()\r\n   at System.Windows.Data.BindingExpression.Activate(Object item)\r\n   at System.Windows.Data.BindingExpression.AttachToContext(AttachAttempt attempt)\r\n   at System.Windows.Data.BindingExpression.MS.Internal.Data.IDataBindEngineClient.AttachToContext(Boolean lastChance)\r\n   at MS.Internal.Data.DataBindEngine.Task.Run(Boolean lastChance)\r\n   at MS.Internal.Data.DataBindEngine.Run(Object arg)\r\n   at MS.Internal.Data.DataBindEngine.OnLayoutUpdated(Object sender, EventArgs e)\r\n   at System.Windows.ContextLayoutManager.fireLayoutUpdateEvent()\r\n   at System.Windows.ContextLayoutManager.UpdateLayout()\r\n   at System.Windows.Interop.HwndSource.SetLayoutSize()\r\n   at System.Windows.Interop.HwndSource.set_RootVisualInternal(Visual value)\r\n   at System.Windows.Window.SetRootVisualAndUpdateSTC()\r\n   at System.Windows.Window.SetupInitialState(Double requestedTop, Double requestedLeft, Double requestedWidth, Double requestedHeight)\r\n   at System.Windows.Window.CreateSourceWindow(Boolean duringShow)\r\n   at System.Windows.Window.ShowHelper(Object booleanBox)\r\n   at System.Windows.Window.Show()\r\n   at PCAnalyzer.App.App.OnStartup(StartupEventArgs e) in D:\\a\\Otimizador-\\Otimizador-\\src\\PCAnalyzer.App\\App.xaml.cs:line 34",
+    "timestamp": "2026-10-14T19:26:16.9110158+00:00"
+  }
+}
