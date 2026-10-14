@@ -2,6 +2,8 @@
 
 Correção da inicialização: a barra de progresso agora recebe o valor em uma única direção. A ligação anterior herdava o modo de escrita do WPF e tentava atualizar uma propriedade com setter privado, causando uma exceção ao construir a janela.
 
+Correção do fechamento: a janela aguarda o retorno do evento de fechamento antes de concluir a saída após liberar os recursos, inclusive quando essa liberação termina imediatamente.
+
 Baixe **PCAnalyzer-windows-x64.zip** na seção **Assets** abaixo. Os arquivos automáticos “Source code” contêm apenas o código-fonte.
 
 1. Extraia o ZIP completo para uma pasta gravável.

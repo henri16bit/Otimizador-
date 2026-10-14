@@ -20,6 +20,12 @@ public partial class MainWindow : Window
         if (_canClose) return;
         args.Cancel = true; IsEnabled = false;
         try { await _viewModel.DisposeAsync(); }
-        finally { _canClose = true; Close(); }
+        finally
+        {
+            _canClose = true;
+            // DisposeAsync can complete synchronously. Wait until the canceled Closing
+            // event has returned before closing again, otherwise WPF rejects reentry.
+            _ = Dispatcher.BeginInvoke(new Action(Close));
+        }
     }
 }
