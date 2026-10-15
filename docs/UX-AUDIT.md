@@ -48,6 +48,8 @@ A suíte portátil passou de 116 para 142 casos. A validação corrente e seus c
 
 A revisão das capturas no Windows identificou ainda um defeito no template compartilhado de `ComboBox`: a seleção ignorava o seletor de template usado por `DisplayMemberPath` e mostrava o texto interno de records. O template agora respeita nome/formatação; os cenários verificam o texto efetivamente renderizado nas seleções de teste e adaptador.
 
+Conclusão da revisão: `v0.3.0-preview.3` publicada após aprovação dos dez cenários WPF e do smoke do pacote no Windows. Build sem avisos, 142 testes C#, cinco testes Python e cinco cenários PowerShell aprovados. [Evidência e identificação do pacote](VALIDATION.md#verificação-windows-e-publicação-confirmadas). As limitações de hardware abaixo permanecem explícitas.
+
 ## Trabalho que continua dependente de implementação ou hardware
 
 - Temperatura/clock efetivo da CPU, SPD/timings/canais, SMART/desgaste NVMe, benchmark GPU, scheduling/stacks e latência física de entrada não ganharam provedores fictícios.

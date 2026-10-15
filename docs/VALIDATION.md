@@ -18,6 +18,14 @@ Comando dos cenários em Windows, após o build:
 
 A aprovação de um workflow confirma apenas os checks executados naquele commit. Sensores, driver da rede, UAC, ETW/PresentMon, overhead e Windows 10 Pro 22H2 do computador alvo continuam sujeitos à validação local.
 
+### Verificação Windows e publicação confirmadas
+
+Versão **v0.3.0-preview.3**, commit `cded4d8111632c04b0432642db3c8c1f43ce1a02`: [execução no Windows](https://github.com/henri16bit/Otimizador-/actions/runs/38729726505). Restore, compilação sem avisos, 142 testes C#, cinco testes de pacote, cinco cenários de publicação, cenários WPF, empacotamento, smoke e publicação terminaram com sucesso.
+
+Os **dez cenários WPF aprovados** verificaram nomes legíveis nas listas, recuperação após interrupção, progresso visível, navegação durante execução, conclusão sem trocar de página, cancelamento, falha, reabertura do SQLite, leitura de rede com propriedade indisponível e sensores ausentes. O smoke do pacote confirmou **oito páginas, sete abas internas e tamanho compacto**, sem iniciar coleta de hardware. As capturas finais da visão geral e da rede foram inspecionadas; a seleção agora mostra o nome legível, sem texto interno de records.
+
+A [release pública](https://github.com/henri16bit/Otimizador-/releases/tag/v0.3.0-preview.3) contém `PCAnalyzer-windows-x64.zip` (148.403.615 bytes) e `PCAnalyzer-windows-x64.zip.sha256`, ambos confirmados como `uploaded`. SHA256 do ZIP: `e6f29374b0dd03b2d21c6a30c74c87c34d5cdebcd8875d5eabc1fc92817d8cbc`. O registro foi obtido via `refs/notes/pcanalyzer-releases`; a captura de rede com dados de cenário está em `refs/notes/pcanalyzer-network-fixture-preview`. Isso comprova os fluxos testados no runner, não o hardware do usuário.
+
 ## Histórico: revisão anterior da interface (14/10)
 
 A suíte portátil passou a **116 casos aprovados**, incluindo apresentação de unidades sem modificar as amostras, RAM física sincronizada, leituras indisponíveis, precisão de valores pequenos, escala dos gráficos e recebimento identificado de um único adaptador. Os cinco testes Python de pacote e os cinco cenários PowerShell isolados de publicação também passaram. O resultado C# está em `artifacts/test-results/interface.trx`.
