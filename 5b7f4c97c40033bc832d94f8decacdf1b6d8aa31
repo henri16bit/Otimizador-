@@ -1,0 +1,22 @@
+{
+  "tag": "v0.3.0-preview.1",
+  "timestamp": "2026-10-15T11:37:19.3210877+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/38728424740",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "ui_flows": "failure",
+    "package": "skipped",
+    "smoke": "skipped",
+    "publish": "skipped"
+  },
+  "uiFlowStartup": {
+    "success": false,
+    "error": "System.Exception: The component 'PCAnalyzer.WpfHarness.Program+FixtureApplication' does not have a resource identified by the URI '/PCAnalyzer;component/app.xaml'.\r\n   at System.Windows.Application.LoadComponent(Object component, Uri resourceLocator)\r\n   at PCAnalyzer.App.App.InitializeComponent() in D:\\a\\Otimizador-\\Otimizador-\\src\\PCAnalyzer.App\\App.xaml:line 1\r\n   at PCAnalyzer.WpfHarness.Program.Main() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 21",
+    "timestamp": "2026-10-15T11:37:15.0820439+00:00"
+  }
+}
