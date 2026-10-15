@@ -1,0 +1,76 @@
+{
+  "tag": "v0.3.0-preview.3",
+  "timestamp": "2026-10-15T11:49:56.9283090+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/38729726505",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "ui_flows": "success",
+    "package": "success",
+    "smoke": "success",
+    "publish": "success"
+  },
+  "startup": {
+    "success": true,
+    "views": 8,
+    "detailViews": 7,
+    "compactLayoutChecked": true,
+    "passiveHardwareStarted": false,
+    "timestamp": "2026-10-15T11:49:39.855441+00:00"
+  },
+  "uiFlows": {
+    "success": true,
+    "checks": [
+      "readable selection labels",
+      "interrupted execution recovery",
+      "dashboard progress",
+      "navigation during run",
+      "no forced navigation",
+      "cancel",
+      "failure",
+      "reopen stored result",
+      "network read and unavailable property",
+      "missing sensors"
+    ],
+    "fixtureDataOnly": true,
+    "hardwareOrConfigurationChanged": false
+  },
+  "publication": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/henri16bit/Otimizador-/releases/assets/643701214",
+        "contentType": "application/zip",
+        "createdAt": "2026-10-15T11:49:47Z",
+        "digest": "sha256:e6f29374b0dd03b2d21c6a30c74c87c34d5cdebcd8875d5eabc1fc92817d8cbc",
+        "downloadCount": 0,
+        "id": "RA_kwDOVJq4M84mXhne",
+        "label": "",
+        "name": "PCAnalyzer-windows-x64.zip",
+        "size": 148403615,
+        "state": "uploaded",
+        "updatedAt": "2026-10-15T11:49:52Z",
+        "url": "https://github.com/henri16bit/Otimizador-/releases/download/v0.3.0-preview.3/PCAnalyzer-windows-x64.zip"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/henri16bit/Otimizador-/releases/assets/643701215",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-10-15T11:49:47Z",
+        "digest": "sha256:bffc0147805dd28fdfe16a0790768c8a095faff3e0f6589a576b227ef4ec5103",
+        "downloadCount": 0,
+        "id": "RA_kwDOVJq4M84mXhnf",
+        "label": "",
+        "name": "PCAnalyzer-windows-x64.zip.sha256",
+        "size": 94,
+        "state": "uploaded",
+        "updatedAt": "2026-10-15T11:49:48Z",
+        "url": "https://github.com/henri16bit/Otimizador-/releases/download/v0.3.0-preview.3/PCAnalyzer-windows-x64.zip.sha256"
+      }
+    ],
+    "isDraft": false,
+    "url": "https://github.com/henri16bit/Otimizador-/releases/tag/v0.3.0-preview.3"
+  }
+}
