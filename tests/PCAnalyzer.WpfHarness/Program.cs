@@ -30,15 +30,14 @@ internal static class Program
                 await RunAsync(window, vm, backend);
                 Directory.CreateDirectory("artifacts");
                 await File.WriteAllTextAsync("artifacts/ui-flow-result.json", JsonSerializer.Serialize(new { success = true,
-                    checks = new[] { "interrupted execution recovery", "dashboard progress", "navigation during run", "no forced navigation", "cancel", "failure", "reopen stored result", "network read and unavailable property", "missing sensors" },
+                    checks = new[] { "readable selection labels", "interrupted execution recovery", "dashboard progress", "navigation during run", "no forced navigation", "cancel", "failure", "reopen stored result", "network read and unavailable property", "missing sensors" },
                     fixtureDataOnly = true, hardwareOrConfigurationChanged = false }));
                 _exitCode = 0;
             }
             catch (Exception error) { Console.Error.WriteLine(error); Directory.CreateDirectory("artifacts"); await File.WriteAllTextAsync("artifacts/ui-flow-result.json", JsonSerializer.Serialize(new { success = false, error = error.ToString() })); }
-            finally { await vm.DisposeAsync(); window.Close(); application.Shutdown(_exitCode); Dispatcher.ExitAllFrames(); }
+            finally { await vm.DisposeAsync(); window.Close(); application.Shutdown(_exitCode); }
         }, DispatcherPriority.ApplicationIdle);
-        Dispatcher.Run();
-        return _exitCode;
+        return application.Run();
     }
     private static async Task RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend)
     {
@@ -49,6 +48,10 @@ internal static class Program
             "Interrupted execution must not display an invented duration or restart.");
         Require(vm.OverviewCards.All(c => c.Value == "—"), "Unavailable sensors must not become zero.");
         vm.SelectedTest = TestCatalog.Get("ping");
+        window.UpdateLayout();
+        var testSelector = Descendants<ComboBox>(window).Single(c => c.SelectedItem is TestDefinition);
+        Require(Descendants<TextBlock>(testSelector).Any(t => t.Text == vm.SelectedTest.Name),
+            "Test selector must show the human-readable name, not the record's technical description.");
         vm.StartSelectedTestCommand.Execute(null);
         await Until(() => vm.TestIsActive && vm.ExecutionStage == "Fixture: pacote 1 de 20");
         window.UpdateLayout();
@@ -81,8 +84,12 @@ internal static class Program
         vm.InspectNetworkCommand.Execute(null); await Until(() => !vm.IsBusy);
         Require(vm.NetworkSettings.Count == 1 && !vm.NetworkPreviewCommand.CanExecute(null), "Unsupported driver property appears writable.");
         Require(vm.NetworkReadStatus.Contains("Leitura concluída"), "Network read lacks feedback.");
-        vm.NavigateCommand.Execute("dashboard"); window.UpdateLayout();
+        window.UpdateLayout();
+        var adapterSelector = Descendants<ComboBox>(window).Single(c => ReferenceEquals(c.ItemsSource, vm.NetworkAdapters));
+        Require(Descendants<TextBlock>(adapterSelector).Any(t => t.Text == vm.SelectedAdapter!.Name), "Adapter selector must show a readable name.");
         var diagnostics = new StartupDiagnostics(["--smoke-test", "--smoke-output", "artifacts/ui-flow-screenshot.json"]);
+        diagnostics.CaptureView((FrameworkElement)window.Content, "network-fixture");
+        vm.NavigateCommand.Execute("dashboard"); window.UpdateLayout();
         diagnostics.CaptureView((FrameworkElement)window.Content, "dashboard-fixture");
     }
     private static async Task Until(Func<bool> condition)

@@ -46,6 +46,8 @@ Os estados abaixo qualificam a base anterior, não promessas sobre a refatoraç�
 
 A suíte portátil passou de 116 para 142 casos. A validação corrente e seus comandos estão em [VALIDATION.md](VALIDATION.md). As capturas do runner mostram renderização real; os valores de cenário são fixtures identificadas, não medições do computador do usuário.
 
+A revisão das capturas no Windows identificou ainda um defeito no template compartilhado de `ComboBox`: a seleção ignorava o seletor de template usado por `DisplayMemberPath` e mostrava o texto interno de records. O template agora respeita nome/formatação; os cenários verificam o texto efetivamente renderizado nas seleções de teste e adaptador.
+
 ## Trabalho que continua dependente de implementação ou hardware
 
 - Temperatura/clock efetivo da CPU, SPD/timings/canais, SMART/desgaste NVMe, benchmark GPU, scheduling/stacks e latência física de entrada não ganharam provedores fictícios.

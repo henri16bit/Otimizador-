@@ -18,6 +18,12 @@ if (Test-Path -LiteralPath artifacts/ui-flow-result.json) {
 if (Test-Path -LiteralPath artifacts/ui-flow-startup.json) {
     $result['uiFlowStartup'] = Get-Content -LiteralPath artifacts/ui-flow-startup.json -Raw | ConvertFrom-Json
 }
+if ($steps.ui_flows.outcome -ne 'success') {
+    foreach ($stream in @('stdout', 'stderr')) {
+        $logPath = "artifacts/ui-flow-$stream.txt"
+        if (Test-Path -LiteralPath $logPath) { $result["uiFlow$stream"] = @(Get-Content -LiteralPath $logPath -Tail 60) }
+    }
+}
 if (Test-Path -LiteralPath artifacts/release-publication.json) {
     $result['publication'] = Get-Content -LiteralPath artifacts/release-publication.json -Raw | ConvertFrom-Json
 }
@@ -36,7 +42,8 @@ if ($LASTEXITCODE) { throw 'Não foi possível enviar o resultado Git.' }
 $previews = @{
     'pcanalyzer-ui-preview' = 'artifacts/startup-smoke-*-overview.png'
     'pcanalyzer-network-preview' = 'artifacts/startup-smoke-*-investigar.png'
-    'pcanalyzer-flow-preview' = 'artifacts/ui-flow-screenshot-*.png'
+    'pcanalyzer-flow-preview' = 'artifacts/ui-flow-screenshot-dashboard-fixture.png'
+    'pcanalyzer-network-fixture-preview' = 'artifacts/ui-flow-screenshot-network-fixture.png'
 }
 foreach ($name in $previews.Keys) {
     $preview = Get-ChildItem $previews[$name] -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1

@@ -25,7 +25,8 @@ jobs:
       - if: runner.os == 'Windows'
         run: dotnet run --project src/PCAnalyzer.Verify/PCAnalyzer.Verify.csproj -c Release --no-build --no-restore -- --output artifacts/windows-verification
       - if: runner.os == 'Windows'
-        run: dotnet run --project tests/PCAnalyzer.WpfHarness/PCAnalyzer.WpfHarness.csproj -c Release --no-build --no-restore -- --smoke-test --smoke-output artifacts/ui-flow-startup.json
+        shell: pwsh
+        run: ./scripts/test-ui.ps1
       - if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/publish.ps1
@@ -43,4 +44,5 @@ jobs:
             artifacts/windows-verification/**/validation-result.json
             artifacts/ui-flow-*.json
             artifacts/ui-flow-*.png
+            artifacts/ui-flow-*.txt
           if-no-files-found: warn

@@ -1,6 +1,6 @@
-# Validação no Windows — pendente
+# Validação no computador Windows do usuário — roteiro
 
-Este documento é um roteiro, **não um registro de resultados aprovados**. O ambiente usado para desenvolver e executar a suíte é Linux. Não houve demonstração de WPF, WMI/Win32, NVML, captura ETW, captura PresentMon, alteração NetAdapter ou restauração em hardware Windows nesta etapa.
+Este documento é um roteiro, **não um registro de resultados aprovados no computador alvo**. O desenvolvimento e a suíte portátil usam Linux; os workflows executam a interface WPF no runner Windows, com resultados registrados em [VALIDATION.md](VALIDATION.md) e nas notas Git por commit. Isso não comprova WMI/Win32, NVML, captura ETW/PresentMon, alteração NetAdapter ou restauração no hardware do usuário.
 
 Alvo solicitado: **Windows 10 Pro 22H2 x64**, i7-10700K (8 físicos/16 lógicos), ASUS TUF Gaming B460-PLUS, RTX 3060 12 GB, 16 GB DDR4 em dois módulos, dois SSDs NVMe, Intel I219-V e monitor 240 Hz. Os valores são referência de conferência informada pelo usuário, não dados a serem inseridos na aplicação. Preserve os modelos/valores efetivamente descobertos quando houver diferença.
 
@@ -21,6 +21,16 @@ Os testes ativos e as mudanças abaixo são **manuais**. A suíte normal do repo
 5. Remova temporariamente a pasta `worker` de uma cópia de teste: ações privilegiadas devem apontar ausência do auxiliar; coleta passiva deve continuar. Recoloque a pasta antes dos testes seguintes.
 
 Critérios cobertos: inicialização, fluxo passivo, ausência de carga automática, UI responsiva e indisponibilidade explícita. Registrar screenshot sem gráfico preenchido por dados fictícios.
+
+### Fluxo integrado de diagnóstico
+
+1. Na **Visão geral**, selecione **Análise do sistema**, leia objetivo/duração e inicie. Confira etapa, tempo e cancelamento; o perfil deve retomar a cadência anterior ao terminar.
+2. Durante um ping manual, navegue para **Componentes**. A conclusão deve manter essa página e atualizar o resumo na **Visão geral**.
+3. Cancele outro teste. O estado deve ser **Cancelado**, com dados parciais identificados quando existirem; gráficos do teste anterior não devem aparecer como novos.
+4. Em **Histórico**, reabra o teste finalizado e confira indicadores, séries, fontes e horários. Feche e abra o programa para repetir a consulta.
+5. Compare dois pings para destinos diferentes: o programa deve explicar por que não calcula diferenças. Para o mesmo destino, diferenças são descritivas e não demonstram ganho.
+6. Exporte o teste em HTML/JSON com anonimização e confira dados, contexto e ausência de identificadores pessoais esperados. Desconecte uma fonte somente em ambiente de teste adequado e confira `—` e a explicação de indisponibilidade.
+7. Somente num ambiente de teste, interrompa o processo durante um diagnóstico sem alteração de configuração. Ao reabrir, o registro deve indicar falha/interrupção com duração desconhecida, sem reiniciar automaticamente o teste.
 
 ## 2. Inventário e relações de hardware
 
@@ -58,6 +68,8 @@ Produza uma observação legítima suficientemente longa. A regra CPU exige ao m
 Sem amostras, mostrar dados insuficientes. Sem evidência nas regras limitadas, a mensagem deve dizer que não há motivo demonstrado para modificar configurações, sem certificar o hardware ou desempenho esperado do modelo. Verificar que as conclusões preservam as limitações de CPU térmica/SPD/SMART ainda não implementados.
 
 ## 5. Ping manual e rede
+
+Em **Investigar → Rede**, use **Detectar conexões**, escolha o adaptador e clique em **Ler detalhes**. Confira nome, link, gateway, driver, RSS, energia e propriedades com o Gerenciador de Dispositivos/PowerShell. Troque o adaptador durante uma consulta: resultados da seleção anterior não devem preencher a nova seleção. Propriedades sem enumeração restaurável devem ficar somente leitura, com motivo visível.
 
 Selecione gateway ou destino controlado e acione o comando de ping. A interface envia 20 sondas com timeout conservador. Confira contagem, RTT min/média/max/p95 e jitter definido como média de diferenças absolutas entre respostas sucessivas; uma ausência não deve ligar pares separados por uma lacuna. Compare a série bruta com os cálculos, não somente com o resumo.
 

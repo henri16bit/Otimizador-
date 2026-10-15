@@ -9,7 +9,7 @@ name: Publish Windows release
       tag:
         description: Existing version tag to publish
         required: true
-        default: v0.3.0-preview.2
+        default: v0.3.0-preview.3
 
 permissions:
   contents: read
@@ -58,7 +58,8 @@ jobs:
         run: dotnet test tests/PCAnalyzer.Tests/PCAnalyzer.Tests.csproj -c Release --no-build --no-restore --logger trx
       - name: Exercise diagnostic flows in the real WPF interface
         id: ui_flows
-        run: dotnet run --project tests/PCAnalyzer.WpfHarness/PCAnalyzer.WpfHarness.csproj -c Release --no-build --no-restore -- --smoke-test --smoke-output artifacts/ui-flow-startup.json
+        shell: pwsh
+        run: ./scripts/test-ui.ps1
       - name: Package self-contained Windows application
         id: package
         shell: pwsh
@@ -92,6 +93,7 @@ jobs:
             artifacts/release-publication.json
             artifacts/ui-flow-*.json
             artifacts/ui-flow-*.png
+            artifacts/ui-flow-*.txt
           if-no-files-found: warn
       - name: Record publication result for Git clients
         if: always() && steps.checkout.outcome == 'success'

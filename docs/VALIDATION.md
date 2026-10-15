@@ -13,7 +13,7 @@ O workflow de release bloqueia a publicação até executar no Windows os cenár
 Comando dos cenários em Windows, após o build:
 
 ```powershell
-dotnet run --project tests/PCAnalyzer.WpfHarness/PCAnalyzer.WpfHarness.csproj -c Release --no-build --no-restore -- --smoke-test --smoke-output artifacts/ui-flow-startup.json
+./scripts/test-ui.ps1
 ```
 
 A aprovação de um workflow confirma apenas os checks executados naquele commit. Sensores, driver da rede, UAC, ETW/PresentMon, overhead e Windows 10 Pro 22H2 do computador alvo continuam sujeitos à validação local.
