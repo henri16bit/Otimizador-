@@ -70,14 +70,15 @@ public sealed class NetworkInspector : INetworkPropertyAccess
             return new(interfaceGuid, ReadString(root, "Name") ?? "", ReadString(root, "Description") ?? "",
                 ReadString(root, "DriverVersion"), ReadString(root, "DriverInformation"), ReadString(root, "DriverDate"),
                 ReadString(root, "LinkSpeed"), properties, ReadFacts(root, "Rss", "Get-NetAdapterRss"),
-                ReadFacts(root, "Statistics", "Get-NetAdapterStatistics"), Availability.Available, limitations);
+                ReadFacts(root, "Statistics", "Get-NetAdapterStatistics"), Availability.Available, limitations,
+                PowerManagement: ReadFacts(root, "Power", "Get-NetAdapterPowerManagement"));
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or JsonException or TimeoutException or Win32Exception)
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or JsonException or TimeoutException or Win32Exception or UnauthorizedAccessException)
         {
             var status = ex is Win32Exception { NativeErrorCode: 2 } ||
                 ex is IOException && ex.Message.Contains("Windows PowerShell não encontrado", StringComparison.Ordinal)
                 ? Availability.ToolMissing
-                : ex is Win32Exception { NativeErrorCode: 5 } || ex.Message.Contains("Access", StringComparison.OrdinalIgnoreCase) ||
+                : ex is UnauthorizedAccessException or Win32Exception { NativeErrorCode: 5 } || ex.Message.Contains("Access", StringComparison.OrdinalIgnoreCase) ||
                   ex.Message.Contains("Acesso", StringComparison.OrdinalIgnoreCase)
                     ? Availability.PermissionRequired : Availability.ReadError;
             return Unavailable(interfaceGuid, status, ex.Message);
@@ -150,10 +151,10 @@ public sealed class NetworkInspector : INetworkPropertyAccess
     private static IReadOnlyList<HardwareFact> ReadFacts(JsonElement parent, string name, string source)
     {
         if (!parent.TryGetProperty(name, out var obj) || obj.ValueKind != JsonValueKind.Object)
-            return [new(name, null, source, Availability.Unsupported, "A propriedade não foi exposta pelo driver ou pelo módulo NetAdapter.")];
+                return [new(name, null, source, Availability.Unsupported, "Dados não disponíveis — verifique permissões ou suporte do dispositivo.")];
         return obj.EnumerateObject().Select(p => new HardwareFact(p.Name,
-            p.Value.ValueKind == JsonValueKind.Null ? null : p.Value.ToString(), source,
-            p.Value.ValueKind == JsonValueKind.Null ? Availability.Unsupported : Availability.Available)).ToArray();
+            p.Value.ValueKind == JsonValueKind.Null || string.IsNullOrWhiteSpace(p.Value.ToString()) ? null : p.Value.ToString(), source,
+            p.Value.ValueKind == JsonValueKind.Null || string.IsNullOrWhiteSpace(p.Value.ToString()) ? Availability.Unsupported : Availability.Available)).ToArray();
     }
 
     private static async Task<JsonDocument> RunNetAdapterAsync(object request, CancellationToken cancellationToken)
@@ -273,9 +274,17 @@ public sealed class NetworkInspector : INetworkPropertyAccess
                 ReceivedPacketErrors = $s.ReceivedPacketErrors; OutboundPacketErrors = $s.OutboundPacketErrors;
                 ReceivedDiscardedPackets = $s.ReceivedDiscardedPackets; OutboundDiscardedPackets = $s.OutboundDiscardedPackets }
             } catch { $limits.Add('Statistics: ' + $_.Exception.Message) }
+            $power = $null
+            try {
+              $p = Get-NetAdapterPowerManagement -Name $literalName -IncludeHidden
+              $power = @{ AllowComputerToTurnOffDevice = [string]$p.AllowComputerToTurnOffDevice;
+                DeviceSleepOnDisconnect = [string]$p.DeviceSleepOnDisconnect;
+                SelectiveSuspend = [string]$p.SelectiveSuspend; WakeOnMagicPacket = [string]$p.WakeOnMagicPacket;
+                WakeOnPattern = [string]$p.WakeOnPattern; ArpOffload = [string]$p.ArpOffload; NSOffload = [string]$p.NSOffload }
+            } catch { $limits.Add('Power management: ' + $_.Exception.Message) }
             @{ Name = $adapter.Name; Description = $adapter.InterfaceDescription; DriverVersion = [string]$adapter.DriverVersion;
                DriverInformation = [string]$adapter.DriverInformation; DriverDate = [string]$adapter.DriverDate;
-               LinkSpeed = [string]$adapter.LinkSpeed; Properties = @($properties); Rss = $rss; Statistics = $stats;
+               LinkSpeed = [string]$adapter.LinkSpeed; Properties = @($properties); Rss = $rss; Statistics = $stats; Power = $power;
                Limitations = @($limits.ToArray()) } | ConvertTo-Json -Depth 8 -Compress
           } else { throw 'Unsupported action.' }
         } catch {

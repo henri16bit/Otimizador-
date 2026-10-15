@@ -14,13 +14,14 @@ public sealed record NetworkProperty(string RegistryKeyword, string DisplayName,
     string Recommendation, string ExpectedImpact, ChangeRisk Risk = ChangeRisk.Moderate,
     bool AdapterRestartMayBeRequired = true)
 {
-    public bool CanChange => ValidRegistryValues.Count > 0 && RegistryValues.Count == 1;
+    public bool CanChange => ValidRegistryValues.Count > 0 && RegistryValues.Count == 1
+        && ValidRegistryValues.Contains(RegistryValues[0], StringComparer.Ordinal);
 }
 public sealed record AdapterDetail(Guid InterfaceGuid, string Name, string Description, string? DriverVersion,
     string? DriverInformation, string? DriverDate, string? LinkSpeed, IReadOnlyList<NetworkProperty> AdvancedProperties,
     IReadOnlyList<HardwareFact> Rss, IReadOnlyList<HardwareFact> Statistics,
     Availability Status, IReadOnlyList<string> Limitations,
-    string Source = "PowerShell NetAdapter (Windows inbox)");
+    string Source = "PowerShell NetAdapter (Windows inbox)", IReadOnlyList<HardwareFact>? PowerManagement = null);
 
 public interface INetworkPropertyAccess
 {
@@ -34,7 +35,7 @@ public sealed record PingObservation(int Sequence, DateTimeOffset Timestamp, str
 public sealed record PingMeasurement(string Host, DateTimeOffset StartedAt, DateTimeOffset EndedAt,
     IReadOnlyList<PingObservation> Observations, int RequestedCount, int SentCount, int ReceivedCount,
     double? LossPercent, double? MinimumRttMs, double? AverageRttMs, double? MaximumRttMs,
-    double? P95RttMs, double? JitterMs, bool Cancelled, string Limitation)
+    double? P95RttMs, double? JitterMs, bool Cancelled, string Limitation, string? ResolvedAddress = null)
 {
     public const string JitterDefinition = "Média de |RTT(i) - RTT(i-1)| entre respostas sucessivas; lacunas interrompem pares. Não é RFC 3550.";
 }

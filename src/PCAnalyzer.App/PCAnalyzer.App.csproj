@@ -9,6 +9,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="PCAnalyzer.WpfHarness" />
     <ProjectReference Include="../PCAnalyzer.Core/PCAnalyzer.Core.csproj" />
     <ProjectReference Include="../PCAnalyzer.Hardware/PCAnalyzer.Hardware.csproj" />
     <ProjectReference Include="../PCAnalyzer.Diagnostics/PCAnalyzer.Diagnostics.csproj" />

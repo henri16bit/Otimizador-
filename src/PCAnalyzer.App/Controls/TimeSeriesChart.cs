@@ -21,6 +21,8 @@ public sealed class TimeSeriesChart : FrameworkElement
     private readonly List<(MetricSample Sample, Point Point)> _points = [];
     private Rect _plot;
     private Point? _hover;
+    private string? _axisKey;
+    private double _axisMinimum = double.NaN, _axisMaximum = double.NaN;
     public IReadOnlyList<MetricSample>? Samples { get => (IReadOnlyList<MetricSample>?)GetValue(SamplesProperty); set => SetValue(SamplesProperty, value); }
 
     public TimeSeriesChart()
@@ -48,7 +50,15 @@ public sealed class TimeSeriesChart : FrameworkElement
         var minimum = available.Min(s => s.Value!.Value);
         var maximum = available.Max(s => s.Value!.Value);
         if (available[0].Unit == "%" && minimum >= 0 && maximum <= 100) { minimum = 0; maximum = 100; }
-        if (Math.Abs(maximum - minimum) < 0.00000001) { var padding = Math.Max(Math.Abs(maximum) * .05, .5); minimum -= padding; maximum += padding; }
+        else
+        {
+            minimum = minimum >= 0 ? 0 : -NiceCeiling(Math.Abs(minimum));
+            maximum = maximum <= 0 ? 1 : NiceCeiling(maximum);
+            var axisKey = available[0].Key + "|" + available[0].Unit;
+            if (_axisKey != axisKey) { _axisKey = axisKey; _axisMinimum = minimum; _axisMaximum = maximum; }
+            else { _axisMinimum = Math.Min(_axisMinimum, minimum); _axisMaximum = Math.Max(_axisMaximum, maximum); }
+            minimum = _axisMinimum; maximum = _axisMaximum;
+        }
         var scale = MetricPresentation.Scale(available[0].Unit, Math.Max(Math.Abs(minimum), Math.Abs(maximum)));
         var first = samples[0].Timestamp;
         var last = samples[^1].Timestamp;
@@ -86,6 +96,12 @@ public sealed class TimeSeriesChart : FrameworkElement
         }
     }
     private static bool Valid(MetricSample sample) => sample.Status == Availability.Available && sample.Value is { } value && double.IsFinite(value);
+    private static double NiceCeiling(double value)
+    {
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(Math.Max(value, .001))));
+        var scaled = value / magnitude;
+        return (scaled <= 1 ? 1 : scaled <= 2 ? 2 : scaled <= 5 ? 5 : 10) * magnitude;
+    }
     private void Text(DrawingContext drawing, string value, Point point, double size)
         => drawing.DrawText(new FormattedText(value, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             new Typeface("Segoe UI"), size, LabelBrush, VisualTreeHelper.GetDpi(this).PixelsPerDip), point);

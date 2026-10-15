@@ -4,6 +4,29 @@
     xmlns:controls="clr-namespace:PCAnalyzer.App.Controls"
     Title="PC Performance Analyzer" Width="1320" Height="860" MinWidth="960" MinHeight="640"
     WindowStartupLocation="CenterScreen" Closing="OnClosing">
+    <Window.Resources>
+        <DataTemplate x:Key="ExecutionPanel">
+            <StackPanel>
+                <DockPanel><Button DockPanel.Dock="Right" Content="Cancelar teste" Command="{Binding CancelCommand}" Visibility="{Binding TestIsActive, Converter={StaticResource BooleanVisibility}}" Margin="12,0,0,0"/>
+                    <TextBlock Text="{Binding ExecutionName}" Style="{StaticResource SectionTitle}" TextWrapping="Wrap"/></DockPanel>
+                <WrapPanel Margin="0,0,0,8"><TextBlock Text="{Binding ExecutionState}" Foreground="{StaticResource Accent}" FontWeight="SemiBold" Margin="0,0,16,0"/>
+                    <TextBlock Foreground="{StaticResource Muted}"><Run Text="Início: "/><Run Text="{Binding ExecutionStarted, Mode=OneWay}"/><Run Text=" · Decorrido: "/><Run Text="{Binding ExecutionElapsed, Mode=OneWay}"/></TextBlock></WrapPanel>
+                <TextBlock Text="{Binding ExecutionStage}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding ExecutionDetail}" Style="{StaticResource Note}" Margin="0,4,0,6"/>
+                <ProgressBar IsIndeterminate="{Binding ProgressIndeterminate}" Value="{Binding ExecutionPercent, Mode=OneWay}" Maximum="100" Height="5" Foreground="{StaticResource Accent}" Background="{StaticResource SurfaceHigh}" BorderThickness="0" Margin="0,6,0,10" Visibility="{Binding TestIsActive, Converter={StaticResource BooleanVisibility}}"/>
+                <TextBlock Text="{Binding ExecutionOutcome}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding PersistenceWarning}" Foreground="{StaticResource Accent}" TextWrapping="Wrap"/>
+                <WrapPanel><Button Content="Abrir resultado detalhado" Command="{Binding OpenLatestTestCommand}" Style="{StaticResource QuietButton}"/><Button Content="Ver histórico / comparar" Command="{Binding NavigateCommand}" CommandParameter="historico" Style="{StaticResource QuietButton}"/></WrapPanel>
+                <Expander Header="Etapas recentes"><ItemsControl ItemsSource="{Binding ExecutionLog}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource Note}" Margin="0,3"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Expander>
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="IndicatorTemplate">
+            <Border Style="{StaticResource Card}" Padding="12" Margin="0,0,10,10" MinWidth="150" MaxWidth="290">
+                <StackPanel><TextBlock Text="{Binding Name}" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/><TextBlock Text="{Binding Reading}" FontSize="23" FontWeight="SemiBold" Margin="0,6"/>
+                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" Margin="0"/><Expander Header="Entender"><controls:MetricHelp Info="{Binding Info}" Margin="0,8,0,0"/></Expander></StackPanel>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
     <Grid Background="{StaticResource Background}">
         <Grid.ColumnDefinitions><ColumnDefinition Width="204"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Border Grid.Column="0" Background="#101827" BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,1,0">
@@ -54,21 +77,26 @@
                 <TabItem Header="Visão geral">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="0,0,4,12">
-                            <TextBlock Text="{Binding MachineSummary}" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis" ToolTip="{Binding MachineSummary}" Margin="0,0,0,16"/>
+                            <Border Style="{StaticResource Card}" BorderBrush="{StaticResource Accent}" Visibility="{Binding HasExecution, Converter={StaticResource BooleanVisibility}}">
+                                <StackPanel><ContentControl Content="{Binding}" ContentTemplate="{StaticResource ExecutionPanel}"/>
+                                    <ItemsControl ItemsSource="{Binding ExecutionIndicators}" ItemTemplate="{StaticResource IndicatorTemplate}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel></ItemsControl>
+                                </StackPanel>
+                            </Border>
                             <ItemsControl ItemsSource="{Binding OverviewCards}">
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="4"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate><DataTemplate>
-                                    <Border Style="{StaticResource Card}" Margin="0,0,10,16" Padding="16">
+                                    <Border Style="{StaticResource Card}" Margin="0,0,10,12" Padding="12">
                                         <StackPanel>
                                             <DockPanel><TextBlock DockPanel.Dock="Right" Text="{Binding Icon}" FontFamily="Segoe MDL2 Assets" FontSize="17" Foreground="{StaticResource Accent}" Margin="5,0,0,0"/><TextBlock Text="{Binding Title}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}"/></DockPanel>
-                                            <Grid Margin="0,12,0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Value}" FontSize="29" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Value}"/>
+                                            <Grid Margin="0,7,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Value}" FontSize="25" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Value}"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding Unit}" FontSize="11" Foreground="{StaticResource Muted}" VerticalAlignment="Bottom" Margin="4,0,0,6"/>
                                             </Grid>
                                             <ProgressBar Value="{Binding Percentage, Mode=OneWay}" Minimum="0" Maximum="100" Height="4" Foreground="{StaticResource Accent}" Background="{StaticResource SurfaceHigh}" BorderThickness="0" Margin="0,0,0,10">
                                                 <ProgressBar.Style><Style TargetType="ProgressBar"><Style.Triggers><DataTrigger Binding="{Binding HasPercentage}" Value="False"><Setter Property="Visibility" Value="Hidden"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style>
                                             </ProgressBar>
                                             <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="10" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail}"/>
+                                            <Expander Header="Entender" FontSize="11" Margin="0,6,0,0"><StackPanel><controls:MetricHelp Info="{Binding Info}" Margin="0,6,0,6"/><TextBlock Text="{Binding Provenance}" Style="{StaticResource Note}" FontSize="10"/></StackPanel></Expander>
                                             <Button Command="{Binding DataContext.OpenComponentCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Id}" Background="Transparent" BorderThickness="0" Padding="0,5" MinHeight="26" HorizontalAlignment="Left" Margin="0,8,0,0"><TextBlock Text="Ver componente →" Foreground="{StaticResource Accent}"/></Button>
                                         </StackPanel>
                                     </Border>
@@ -76,16 +104,43 @@
                             </ItemsControl>
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="O que você quer investigar?" Style="{StaticResource SectionTitle}"/>
-                                    <TextBlock Text="Escolha a situação que você está observando. Os testes só começam quando você os iniciar." Style="{StaticResource Note}"/>
-                                    <WrapPanel>
-                                        <Button Content="Quedas de FPS em jogos" Command="{Binding OpenInvestigationCommand}" CommandParameter="jogos"/>
-                                        <Button Content="Conexão instável" Command="{Binding OpenInvestigationCommand}" CommandParameter="rede"/>
-                                        <Button Content="Travadas e drivers" Command="{Binding OpenInvestigationCommand}" CommandParameter="drivers"/>
-                                        <Button Content="Ver testes rápidos" Command="{Binding OpenInvestigationCommand}" CommandParameter="testes"/>
-                                    </WrapPanel>
+                                    <TextBlock Text="Diagnóstico rápido" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="Escolha o teste. Ele só começa ao clicar em Iniciar." Style="{StaticResource Note}"/>
+                                    <ComboBox ItemsSource="{Binding TestChoices}" SelectedItem="{Binding SelectedTest}" DisplayMemberPath="Name" AutomationProperties.Name="Escolher diagnóstico"/>
+                                    <TextBlock Text="{Binding SelectedTest.Objective}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,6"/>
+                                    <Button Content="{Binding TestActionCaption}" Command="{Binding StartSelectedTestCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/><TextBlock Text="{Binding SelectedTest.Measurements}" Style="{StaticResource Note}"/>
+                                    <TextBlock Text="{Binding SelectedTest.Duration}" Foreground="{StaticResource Accent}" TextWrapping="Wrap"/>
+                                    <Expander Header="Impacto, permissões e limites" Margin="0,8"><StackPanel Margin="8">
+                                        <TextBlock Text="{Binding SelectedTest.Impact}" Style="{StaticResource Note}"/><TextBlock Text="{Binding SelectedTest.Permissions}" Style="{StaticResource Note}"/>
+                                        <TextBlock Text="{Binding SelectedTest.Resources}" Style="{StaticResource Note}"/><TextBlock Text="{Binding SelectedTest.Limitations}" Style="{StaticResource Note}"/>
+                                    </StackPanel></Expander>
+                                    <StackPanel><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedTest.Id}" Value="ping"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                        <TextBlock Text="Destino: gateway ou IP/nome DNS" Foreground="{StaticResource Muted}"/><TextBox Text="{Binding PingHost, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBlock Text="Gateway testa a rede local. Outro destino usa a rota escolhida pelo Windows." Style="{StaticResource Note}"/>
+                                    </StackPanel>
+                                    <StackPanel><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedTest.Id}" Value="frames"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                        <TextBlock Text="Processo para monitorar" Foreground="{StaticResource Muted}"/><ComboBox ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}" DisplayMemberPath="Name"/>
+                                        <TextBlock Text="Você escolherá o PresentMon e confirmará a captura antes de iniciar." Style="{StaticResource Note}"/>
+                                    </StackPanel>
+                                    <WrapPanel><Button Content="DPC/ISR e drivers" Command="{Binding OpenInvestigationCommand}" CommandParameter="drivers"/><Button Content="Rede: consultar e testar" Command="{Binding OpenInvestigationCommand}" CommandParameter="rede"/></WrapPanel>
                                 </StackPanel>
                             </Border>
+                            <Border Style="{StaticResource Card}" Padding="14" Visibility="{Binding ShowFirstUse, Converter={StaticResource BooleanVisibility}}">
+                                <StackPanel><DockPanel><Button DockPanel.Dock="Right" Content="Entendi" Command="{Binding DismissFirstUseCommand}" Style="{StaticResource QuietButton}" Margin="8,0,0,0"/><TextBlock Text="Comece por aqui" FontWeight="SemiBold" FontSize="16"/></DockPanel>
+                                    <TextBlock Text="1. Confira as fontes.  2. Escolha um diagnóstico.  3. Veja o resultado nesta tela." Style="{StaticResource Note}" Margin="0,6,0,4"/>
+                                    <TextBlock Text="{Binding ReadinessSummary}" Foreground="{StaticResource Accent}"/>
+                                    <Button Content="Ver fontes e permissões" Command="{Binding NavigateCommand}" CommandParameter="fontes" Style="{StaticResource QuietButton}" HorizontalAlignment="Left"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource Card}" Padding="14" Margin="0,0,0,12"><Expander Header="Seu computador · componentes detectados">
+                                <ItemsControl ItemsSource="{Binding SystemSummary}" Margin="0,10,0,0"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding Value}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                            </Expander></Border>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <DockPanel><Button DockPanel.Dock="Right" Content="Histórico completo" Command="{Binding NavigateCommand}" CommandParameter="historico" Style="{StaticResource QuietButton}"/><TextBlock Text="Testes recentes" Style="{StaticResource SectionTitle}"/></DockPanel>
+                                <TextBlock Text="Resultados são salvos automaticamente. Selecione um teste para reabrir." Style="{StaticResource Note}"/>
+                                <ComboBox ItemsSource="{Binding RecentTests}" SelectedItem="{Binding SelectedRun}" DisplayMemberPath="Label"/>
+                                <Button Content="Abrir teste selecionado" Command="{Binding OpenTestCommand}" HorizontalAlignment="Left"/>
+                            </StackPanel></Border>
                             <Border Style="{StaticResource Card}">
                                 <StackPanel><DockPanel><Button DockPanel.Dock="Right" Content="Ver detalhes" Command="{Binding OpenComponentCommand}" CommandParameter="cpu" Style="{StaticResource QuietButton}" Margin="12,0,0,0"/><StackPanel><TextBlock Text="Uso da CPU ao longo do tempo" Style="{StaticResource SectionTitle}" Margin="0,0,0,4"/><TextBlock Text="Passe o mouse sobre o gráfico para consultar uma leitura." Style="{StaticResource Note}" FontSize="11"/></StackPanel></DockPanel>
                                     <controls:TimeSeriesChart Samples="{Binding OverviewChartSamples}" Height="170"/>
@@ -95,7 +150,12 @@
                                 <StackPanel>
                                     <DockPanel><Button DockPanel.Dock="Right" Content="Ver observações" Command="{Binding NavigateCommand}" CommandParameter="observacoes" Style="{StaticResource QuietButton}" Margin="12,0,0,0"/><TextBlock Text="{Binding FindingsSummary}" Style="{StaticResource SectionTitle}"/></DockPanel>
                                     <TextBlock Text="A triagem usa as leituras disponíveis. Uma observação isolada não confirma um defeito." Style="{StaticResource Note}"/>
-                                    <ItemsControl ItemsSource="{Binding OverviewFindings}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,6,0,10"><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Explanation}" Style="{StaticResource Note}" Margin="0,4,0,0"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                                    <ItemsControl ItemsSource="{Binding OverviewFindings}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,6,0,10">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                    <WrapPanel><TextBlock Text="{Binding Category, Converter={StaticResource DiagnosticLabel}}" Foreground="{StaticResource Accent}" FontSize="11" Margin="0,4,12,4"/><TextBlock Text="{Binding Confidence, Converter={StaticResource DiagnosticLabel}}" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,4"/></WrapPanel>
+                                    <TextBlock Text="{Binding Explanation}" Style="{StaticResource Note}" Margin="0,4,0,0"/>
+                                    <Button Content="Ver evidência e próximo passo" Command="{Binding DataContext.OpenFindingCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" HorizontalAlignment="Left" Style="{StaticResource QuietButton}"/>
+                                    </StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -109,7 +169,8 @@
                                 <StackPanel Grid.Column="2"><TextBlock Text="Buscar uma leitura" Foreground="{StaticResource Muted}" Margin="0,0,0,6"/><TextBox Text="{Binding MetricFilter, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Buscar leituras" ToolTip="Procure pelo nome da leitura, identificador técnico ou origem."/></StackPanel>
                             </Grid>
                             <Border Style="{StaticResource Card}" Padding="16">
-                                <StackPanel><TextBlock Text="Leituras do componente" Style="{StaticResource SectionTitle}"/><TextBlock Text="Selecione uma linha para ver seu gráfico. Leituras ausentes aparecem com —." Style="{StaticResource Note}" FontSize="11"/>
+                                <StackPanel><TextBlock Text="Leituras do componente" Style="{StaticResource SectionTitle}"/>
+                                    <StackPanel Visibility="{Binding IsStorageComponent, Converter={StaticResource BooleanVisibility}}"><TextBlock Text="Unidade física" FontWeight="SemiBold"/><ComboBox ItemsSource="{Binding DiskChoices}" SelectedItem="{Binding SelectedDisk}" DisplayMemberPath="Name"/><TextBlock Text="Cada unidade mantém suas leituras. SMART e temperatura não estão disponíveis nesta versão." Style="{StaticResource Note}"/></StackPanel><TextBlock Text="Selecione uma linha para ver seu gráfico. Leituras ausentes aparecem com —." Style="{StaticResource Note}" FontSize="11"/>
                                     <TextBlock Text="Aguardando leituras deste componente."><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource Note}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Metrics.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                                     <DataGrid ItemsSource="{Binding Metrics}" SelectedItem="{Binding SelectedMetric}" Height="260" AutomationProperties.Name="Leituras do componente">
                                         <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="ToolTip" Value="{Binding Details}"/></Style></DataGrid.RowStyle>
@@ -125,6 +186,9 @@
                             </Border>
                             <Border Style="{StaticResource Card}">
                                 <StackPanel><TextBlock Text="{Binding SelectedMetric.Name, TargetNullValue=Selecione uma leitura para ver seu histórico, FallbackValue=Selecione uma leitura para ver seu histórico}" Style="{StaticResource SectionTitle}" TextWrapping="Wrap"/><controls:TimeSeriesChart Samples="{Binding ChartSamples}" Height="180"/>
+                                    <WrapPanel Margin="0,6"><TextBlock Text="Janela (minutos)" VerticalAlignment="Center" Margin="0,0,10,8"/><ComboBox ItemsSource="{Binding ChartWindows}" SelectedItem="{Binding ChartWindowMinutes}" Width="90"/></WrapPanel>
+                                    <TextBlock Text="{Binding ChartContext}" Style="{StaticResource Note}"/>
+                                    <controls:MetricHelp Info="{Binding SelectedMetric.Info}" Margin="0,8,0,12"/>
                                     <Expander Header="Origem e detalhes da leitura"><StackPanel Margin="6,10,6,0"><TextBlock Text="{Binding SelectedMetric.Source}" Foreground="{StaticResource Accent}" TextWrapping="Wrap"/><TextBlock Text="{Binding SelectedMetric.Details}" Style="{StaticResource Note}" Margin="0,8,0,0"/><TextBlock Foreground="{StaticResource Muted}" FontSize="11"><Run Text="Intervalo: "/><Run Text="{Binding SelectedMetric.Cadence, Mode=OneWay}"/><Run Text=" · horário: "/><Run Text="{Binding SelectedMetric.Time, Mode=OneWay}"/></TextBlock></StackPanel></Expander>
                                 </StackPanel>
                             </Border>
@@ -157,14 +221,38 @@
                         <TabItem Header="Rede">
                             <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16,20,16,16">
                                 <Border Style="{StaticResource Card}"><StackPanel>
-                                    <TextBlock Text="Sua conexão está oscilando?" Style="{StaticResource SectionTitle}"/>
-                                    <TextBlock Text="Meça o tempo de resposta e a perda de pacotes para um destino. O teste envia 20 pings e mostra o resultado ao terminar." Style="{StaticResource Note}"/>
-                                    <TextBlock Text="Destino (IP, hostname ou gateway)" Foreground="{StaticResource Muted}" Margin="0,0,0,6"/>
-                                    <TextBox Text="{Binding PingHost, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Destino do teste de ping"/>
-                                    <Button Content="Iniciar teste de conexão" Command="{Binding PingCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
-                                    <Expander Header="Como interpretar"><TextBlock Text="Use gateway para testar o roteador local. RTT mede resposta ICMP; um destino que bloqueia ping pode aparentar perda mesmo com uma conexão funcionando. Esse teste não mede input lag físico." Style="{StaticResource Note}" Margin="6,10,6,0"/></Expander>
+                                    <TextBlock Text="1. Escolha sua conexão" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="Veja o adaptador, o link e o gateway. Esta ação só consulta." Style="{StaticResource Note}"/>
+                                    <Button Content="Detectar conexões" Command="{Binding DiscoverNetworkCommand}" HorizontalAlignment="Left"/>
+                                    <ComboBox ItemsSource="{Binding NetworkAdapters}" SelectedItem="{Binding SelectedAdapter}" DisplayMemberPath="Name" AutomationProperties.Name="Adaptador de rede"/>
+                                    <TextBlock Text="{Binding NetworkSelectionNote}" Foreground="{StaticResource Accent}" TextWrapping="Wrap"/>
+                                    <Button Content="Ler detalhes do adaptador" Command="{Binding InspectNetworkCommand}" HorizontalAlignment="Left"/>
+                                    <TextBlock Text="{Binding NetworkReadStatus}" Style="{StaticResource Note}"/>
+                                    <TextBlock Text="{Binding NetworkDriver}" TextWrapping="Wrap"/>
+                                    <Expander Header="RSS, energia e contadores"><StackPanel Margin="0,10">
+                                        <TextBlock Text="RSS distribui a recepção entre CPUs. Contadores acumulados não são perda no jogo. Energia pode depender do driver." Style="{StaticResource Note}"/>
+                                        <DataGrid ItemsSource="{Binding NetworkFacts}" Height="230"><DataGrid.Columns><DataGridTextColumn Header="Informação" Binding="{Binding Name}" Width="2*"/><DataGridTextColumn Header="Valor" Binding="{Binding Value}" Width="*"/><DataGridTextColumn Header="Estado" Binding="{Binding State}" Width="*"/></DataGrid.Columns></DataGrid>
+                                    </StackPanel></Expander>
                                 </StackPanel></Border>
-                                <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Confira também o adaptador" Style="{StaticResource SectionTitle}"/><TextBlock Text="Veja recebimento, envio e velocidade do link em Componentes. Propriedades de driver e energia ficam em Ajustes." Style="{StaticResource Note}"/><WrapPanel><Button Content="Ver leituras de rede" Command="{Binding OpenComponentCommand}" CommandParameter="rede"/><Button Content="Abrir ajustes" Command="{Binding NavigateCommand}" CommandParameter="ajustes" Style="{StaticResource QuietButton}"/></WrapPanel></StackPanel></Border>
+                                <Border Style="{StaticResource Card}"><StackPanel>
+                                    <TextBlock Text="2. Teste a conexão" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="Envia 20 pings. Mede resposta, variação e ausência de resposta." Style="{StaticResource Note}"/>
+                                    <TextBlock Text="Destino: gateway ou IP/nome DNS" FontWeight="SemiBold"/>
+                                    <TextBox Text="{Binding PingHost, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Destino do ping"/>
+                                    <TextBlock Text="Gateway usa o adaptador escolhido. Um IP/nome usa a rota do Windows. Não informe URL ou porta." Style="{StaticResource Note}"/>
+                                    <Button Content="Iniciar 20 pings" Command="{Binding PingCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
+                                    <TextBlock Text="Não mede latência do VALORANT. ICMP bloqueado não comprova perda no jogo." Style="{StaticResource Note}"/>
+                                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ExecutionPanel}" Visibility="{Binding HasExecution, Converter={StaticResource BooleanVisibility}}"/>
+                                </StackPanel></Border>
+                                <Border Style="{StaticResource Card}"><StackPanel>
+                                    <TextBlock Text="3. Entenda as propriedades" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="Leia a função antes de mudar. Valores só são alterados após revisão e confirmação." Style="{StaticResource Note}"/>
+                                    <ComboBox ItemsSource="{Binding NetworkSettings}" SelectedItem="{Binding SelectedNetworkSetting}" DisplayMemberPath="Name"/>
+                                    <TextBlock Text="{Binding NetworkSettingState}" Foreground="{StaticResource Accent}" TextWrapping="Wrap"/>
+                                    <TextBlock Margin="0,8" TextWrapping="Wrap"><Run Text="Atual: "/><Run Text="{Binding SelectedNetworkSetting.CurrentDisplayValue, Mode=OneWay}"/></TextBlock>
+                                    <TextBlock Text="{Binding SelectedNetworkSetting.Explanation}" Style="{StaticResource Note}"/>
+                                    <Button Content="Revisar ajuste e restauração" Command="{Binding ReviewNetworkSettingCommand}" HorizontalAlignment="Left"/>
+                                </StackPanel></Border>
                             </StackPanel></ScrollViewer>
                         </TabItem>
                         <TabItem Header="Jogos">
@@ -172,6 +260,12 @@
                                 <Border Style="{StaticResource Card}"><StackPanel>
                                     <TextBlock Text="Analise quedas de FPS e irregularidade de frames" Style="{StaticResource SectionTitle}"/>
                                     <TextBlock Text="Se você já tem um CSV do PresentMon, importe-o para ver FPS, frametimes e percentis." Style="{StaticResource Note}"/>
+                                    <Expander Header="CSV com QPC ou data/hora: informar relógio"><StackPanel Margin="8">
+                                        <TextBlock Text="Deixe vazio para CSV com tempo relativo. Não adivinhe estes valores." Style="{StaticResource Note}"/>
+                                        <TextBlock Text="Frequência QPC real da captura (Hz)"/><TextBox Text="{Binding CsvQpcFrequency, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBlock Text="Offset UTC da captura (exemplo -03:00)"/><TextBox Text="{Binding CsvUtcOffset, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBlock Text="Para relacionar com uma sessão antiga, abra essa sessão no Histórico antes de importar. Só horários alinhados serão comparados." Style="{StaticResource Note}"/>
+                                    </StackPanel></Expander>
                                     <Button Content="Importar captura CSV…" Command="{Binding ImportFramesCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
                                 </StackPanel></Border>
                                 <Border Style="{StaticResource Card}"><StackPanel>
@@ -217,7 +311,7 @@
                                     <TextBlock Text="{Binding SelectedFindingCategory}" Foreground="{StaticResource Accent}" Margin="0,0,0,12"/>
                                     <TextBlock Text="{Binding SelectedFinding.Explanation}" Style="{StaticResource Note}"/>
                                     <TextBlock Text="Próximo passo" FontWeight="SemiBold" Margin="0,8,0,8"/><TextBlock Text="{Binding SelectedFinding.Recommendation}" Style="{StaticResource Note}"/>
-                                    <TextBlock Text="{Binding SelectedFinding.Verification}" Style="{StaticResource Note}"/>
+                                    <TextBlock Text="{Binding SelectedFinding.Verification}" Style="{StaticResource Note}"/><WrapPanel><Button Content="Investigar este componente" Command="{Binding InvestigateFindingCommand}"/><Button Content="Revisar ajustes e reversão" Command="{Binding NavigateCommand}" CommandParameter="ajustes"/></WrapPanel><TextBlock Text="A recomendação orienta a investigação. Nenhum ajuste é aplicado automaticamente." Style="{StaticResource Note}"/>
                                     <Expander Header="Evidências, confiança e limitações"><StackPanel Margin="6,10,6,0">
                                         <TextBlock Foreground="{StaticResource Muted}" Margin="0,0,0,12"><Run Text="Confiança: "/><Run Text="{Binding SelectedFindingConfidence, Mode=OneWay}"/></TextBlock>
                                         <ItemsControl ItemsSource="{Binding SelectedFinding.Evidence}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,0,0,12"><TextBlock Text="{Binding Description}" TextWrapping="Wrap"/><TextBlock Text="{Binding Source}" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap"/><TextBlock Foreground="{StaticResource Muted}" FontSize="11"><Run Text="{Binding Value, Mode=OneWay, StringFormat={}{0:0.###}}"/><Run Text=" "/><Run Text="{Binding Unit, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Timestamp, Mode=OneWay, StringFormat={}{0:HH:mm:ss}}"/></TextBlock></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
@@ -226,15 +320,27 @@
                                 </StackPanel></Border>
                             </StackPanel></ScrollViewer>
                         </TabItem>
-                        <TabItem Header="Último teste">
+                        <TabItem Header="Resultado do teste">
                             <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16,20,16,16">
                                 <TextBlock Text="{Binding OperationTitle}" Style="{StaticResource SectionTitle}" TextWrapping="Wrap"/>
-                                <TextBlock Text="O resultado de um teste aparece aqui automaticamente quando ele termina." Style="{StaticResource Note}"/>
+                                <TextBlock Text="{Binding OpenedResultContext}" Style="{StaticResource Note}"/>
+                                <WrapPanel><Button Content="Exportar resultado…" Command="{Binding ExportTestCommand}"/><Button Content="Comparar no histórico" Command="{Binding NavigateCommand}" CommandParameter="historico"/></WrapPanel>
+                                <CheckBox Content="Ocultar identificadores na exportação" IsChecked="{Binding Anonymize}"/>
+                                <ItemsControl ItemsSource="{Binding ResultIndicators}" ItemTemplate="{StaticResource IndicatorTemplate}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel></ItemsControl>
+                                <ItemsControl ItemsSource="{Binding TestFindings}"><ItemsControl.ItemTemplate><DataTemplate><Border Style="{StaticResource Card}"><StackPanel>
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><WrapPanel><TextBlock Text="{Binding Category, Converter={StaticResource DiagnosticLabel}}" Foreground="{StaticResource Accent}" Margin="0,6,12,6"/><TextBlock Text="{Binding Confidence, Converter={StaticResource DiagnosticLabel}}" Foreground="{StaticResource Muted}" Margin="0,6"/></WrapPanel><TextBlock Text="{Binding Explanation}" Style="{StaticResource Note}"/>
+                                    <TextBlock Text="Próximo passo" FontWeight="SemiBold"/><TextBlock Text="{Binding Recommendation}" Style="{StaticResource Note}"/>
+                                    <Expander Header="Ver evidências"><ItemsControl ItemsSource="{Binding Evidence}" Margin="8"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,5">
+                                        <TextBlock Text="{Binding Description}" TextWrapping="Wrap"/><TextBlock Text="{Binding Source}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                        <TextBlock Foreground="{StaticResource Accent}"><Run Text="{Binding Value, Mode=OneWay, StringFormat={}{0:0.###}}"/><Run Text=" "/><Run Text="{Binding Unit, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Timestamp, Mode=OneWay, StringFormat={}{0:HH:mm:ss.fff}}"/></TextBlock>
+                                    </StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Expander>
+                                </StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                                <ItemsControl ItemsSource="{Binding ResultLimitations}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource Note}"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
                                 <Border Style="{StaticResource Card}" Visibility="{Binding HasRelativeSeries, Converter={StaticResource BooleanVisibility}}"><StackPanel>
-                                    <TextBlock Text="Série de frames" Foreground="{StaticResource Muted}" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Linha do tempo medida" Foreground="{StaticResource Muted}" Margin="0,0,0,6"/>
                                     <ComboBox ItemsSource="{Binding ResultSeries}" SelectedItem="{Binding SelectedRelativeSeries}" DisplayMemberPath="Name"/>
                                     <controls:RelativeTimeSeriesChart Series="{Binding SelectedRelativeSeries}" Height="210"/>
-                                    <Expander Header="Base de tempo e origem"><StackPanel Margin="6,10,6,0"><TextBlock Text="{Binding SelectedRelativeSeries.TimeBasis}" Style="{StaticResource Note}"/><TextBlock Text="{Binding SelectedRelativeSeries.Source}" Style="{StaticResource Note}"/><TextBlock Text="O gráfico mostra os últimos 10.000 frames retidos. As estatísticas usam os dados da captura; não há correlação UTC automática." Style="{StaticResource Note}"/></StackPanel></Expander>
+                                    <Expander Header="Base de tempo e origem"><StackPanel Margin="6,10,6,0"><TextBlock Text="{Binding SelectedRelativeSeries.TimeBasis}" Style="{StaticResource Note}"/><TextBlock Text="{Binding SelectedRelativeSeries.Source}" Style="{StaticResource Note}"/><TextBlock Text="O gráfico preserva a base temporal da fonte. Relógios relativos exigem uma âncora explícita para comparação com UTC." Style="{StaticResource Note}"/></StackPanel></Expander>
                                 </StackPanel></Border>
                                 <TextBox Text="{Binding OperationText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" MinHeight="260" MaxHeight="520" FontFamily="Consolas" FontSize="12" Padding="16" AutomationProperties.Name="Resultado técnico do último teste"/>
                                 <Button Content="Escolher outro teste" Command="{Binding NavigateCommand}" CommandParameter="investigar" HorizontalAlignment="Left"/>
@@ -250,6 +356,19 @@
                 </TabItem>
                 <TabItem Header="Histórico">
                     <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,0,4,12">
+                        <Border Style="{StaticResource Card}"><StackPanel>
+                            <DockPanel><Button DockPanel.Dock="Right" Content="Atualizar testes" Command="{Binding RefreshTestsCommand}" Style="{StaticResource QuietButton}"/><TextBlock Text="Histórico de diagnósticos" Style="{StaticResource SectionTitle}"/></DockPanel>
+                            <TextBlock Text="Execuções, falhas e cancelamentos ficam registrados. Sessões de telemetria aparecem mais abaixo." Style="{StaticResource Note}"/>
+                            <DataGrid ItemsSource="{Binding TestHistory}" SelectedItem="{Binding SelectedRun}" Height="210"><DataGrid.Columns>
+                                <DataGridTextColumn Header="Teste" Binding="{Binding Name}" Width="2*"/><DataGridTextColumn Header="Início" Binding="{Binding Started}" Width="*"/><DataGridTextColumn Header="Estado" Binding="{Binding Status}" Width="*"/><DataGridTextColumn Header="Duração" Binding="{Binding Duration}" Width="*"/>
+                            </DataGrid.Columns></DataGrid><Button Content="Reabrir resultado" Command="{Binding OpenTestCommand}" HorizontalAlignment="Left"/>
+                            <Expander Header="Comparar dois testes"><StackPanel Margin="0,10">
+                                <TextBlock Text="Use o mesmo diagnóstico, carga, duração e destino. Aplicado não significa melhor." Style="{StaticResource Note}"/>
+                                <TextBlock Text="Antes"/><ComboBox ItemsSource="{Binding TestHistory}" SelectedItem="{Binding BeforeRun}" DisplayMemberPath="Label"/>
+                                <TextBlock Text="Depois"/><ComboBox ItemsSource="{Binding TestHistory}" SelectedItem="{Binding AfterRun}" DisplayMemberPath="Label"/>
+                                <Button Content="Comparar testes selecionados" Command="{Binding CompareTestsCommand}" HorizontalAlignment="Left"/>
+                            </StackPanel></Expander>
+                        </StackPanel></Border>
                         <Border Style="{StaticResource Card}" IsEnabled="{Binding IsLiveView}"><StackPanel>
                             <TextBlock Text="Guardar a coleta ao vivo" Style="{StaticResource SectionTitle}"/>
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -274,9 +393,9 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,0,4,12">
                         <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Comece lendo a configuração atual" Style="{StaticResource SectionTitle}"/><TextBlock Text="O programa mostra os planos e as propriedades disponíveis no seu computador. Cada alteração exige revisão e confirmação." Style="{StaticResource Note}"/><Button Content="Ler configurações disponíveis" Command="{Binding RefreshOptimizationCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/></StackPanel></Border>
                         <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Plano de energia" Style="{StaticResource SectionTitle}"/><TextBlock Text="Um plano diferente pode aumentar consumo, temperatura ou ruído. Meça novamente para verificar o efeito." Style="{StaticResource Note}"/><ComboBox ItemsSource="{Binding PowerPlans}" SelectedItem="{Binding SelectedPowerPlan}" DisplayMemberPath="Name"/><Button Content="Revisar alteração de energia…" Command="{Binding PowerPreviewCommand}" HorizontalAlignment="Left"/></StackPanel></Border>
-                        <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Propriedades do adaptador de rede" Style="{StaticResource SectionTitle}"/><ComboBox ItemsSource="{Binding NetworkSettings}" SelectedItem="{Binding SelectedNetworkSetting}"><ComboBox.ItemTemplate><DataTemplate><TextBlock><Run Text="{Binding AdapterName, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Name, Mode=OneWay}"/></TextBlock></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-                            <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,10"><Run Text="Valor atual: "/><Run Text="{Binding SelectedNetworkSetting.CurrentValue, Mode=OneWay}"/></TextBlock>
-                            <TextBlock Text="Novo valor suportado pelo driver" Foreground="{StaticResource Muted}" Margin="0,0,0,6"/><ComboBox ItemsSource="{Binding NetworkValues}" SelectedItem="{Binding SelectedNetworkValue}" DisplayMemberPath="Name"/>
+                        <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Propriedades do adaptador de rede" Style="{StaticResource SectionTitle}"/><TextBlock Text="Escolha a conexão em Investigar → Rede. Só propriedades com valores reversíveis podem ser alteradas." Style="{StaticResource Note}"/><Button Content="Escolher adaptador e ler detalhes" Command="{Binding OpenInvestigationCommand}" CommandParameter="rede" HorizontalAlignment="Left"/><ComboBox ItemsSource="{Binding NetworkSettings}" SelectedItem="{Binding SelectedNetworkSetting}"><ComboBox.ItemTemplate><DataTemplate><TextBlock><Run Text="{Binding AdapterName, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Name, Mode=OneWay}"/></TextBlock></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+                            <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,10"><Run Text="Valor atual: "/><Run Text="{Binding SelectedNetworkSetting.CurrentDisplayValue, Mode=OneWay}"/></TextBlock>
+                            <TextBlock Text="{Binding NetworkSettingState}" Foreground="{StaticResource Accent}" TextWrapping="Wrap" Margin="0,0,0,10"/><TextBlock Text="Novo valor suportado pelo driver" Foreground="{StaticResource Muted}" Margin="0,0,0,6"/><ComboBox ItemsSource="{Binding NetworkValues}" SelectedItem="{Binding SelectedNetworkValue}" DisplayMemberPath="Name"/>
                             <Expander Header="Efeitos e limitações da propriedade"><StackPanel Margin="6,10,6,0"><TextBlock Text="{Binding SelectedNetworkSetting.Keyword}" Foreground="{StaticResource Accent}"/><TextBlock Text="{Binding SelectedNetworkSetting.Explanation}" Style="{StaticResource Note}" Margin="0,8,0,0"/></StackPanel></Expander>
                             <Button Content="Revisar alteração de rede…" Command="{Binding NetworkPreviewCommand}" HorizontalAlignment="Left"/>
                         </StackPanel></Border>
@@ -293,14 +412,17 @@
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Perfil" Foreground="{StaticResource Muted}" Margin="0,0,0,6"/><ComboBox ItemsSource="{Binding CollectionModes}" SelectedItem="{Binding Mode}"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Intervalo (segundos)" Foreground="{StaticResource Muted}" Margin="0,0,0,6"/><ComboBox ItemsSource="{Binding Intervals}" SelectedItem="{Binding IntervalSeconds}"/></StackPanel></Grid>
                             <Button Content="Salvar preferências" Command="{Binding SavePreferencesCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
                         </StackPanel></Border>
-                        <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Dados e registros locais" Style="{StaticResource SectionTitle}"/><TextBox Text="{Binding DataDirectory, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"/><TextBlock Text="Sessões e registros ficam nessa pasta. O aplicativo inicia somente a descoberta e a coleta passiva." Style="{StaticResource Note}"/><TextBlock Text="{Binding BufferInfo}" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap"/></StackPanel></Border>
+                        <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Dados e registros locais" Style="{StaticResource SectionTitle}"/><TextBox Text="{Binding DataDirectory, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"/><Button Content="Abrir pasta de dados e logs" Command="{Binding OpenDataDirectoryCommand}" HorizontalAlignment="Left"/><TextBlock Text="Sessões e registros ficam nessa pasta. O aplicativo inicia somente a descoberta e a coleta passiva." Style="{StaticResource Note}"/><TextBlock Text="{Binding BufferInfo}" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap"/><TextBlock Text="{Binding CollectorCost}" Style="{StaticResource Note}" Margin="0,10,0,0"/><TextBlock Text="Custo medido no processo do analisador. GPU da interface e impacto em partidas exigem medição externa." Style="{StaticResource Note}" Margin="0,6,0,0"/></StackPanel></Border>
                         <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Disponibilidade e permissões" Style="{StaticResource SectionTitle}"/><TextBlock Text="Algumas leituras dependem de provedores do Windows, do driver NVIDIA ou de ferramentas opcionais. Leituras ausentes ficam explícitas." Style="{StaticResource Note}"/><Button Content="Ver fontes disponíveis" Command="{Binding NavigateCommand}" CommandParameter="fontes" HorizontalAlignment="Left"/><Expander Header="Limites da coleta e operações administrativas"><StackPanel Margin="6,10,6,0"><TextBlock Text="Atualização visual de aproximadamente 1 segundo. Cada leitura preserva sua origem e intervalo real. O buffer retém até 30.000 amostras e os gráficos mostram as últimas 600 de uma métrica." Style="{StaticResource Note}"/><TextBlock Text="O aplicativo não instala drivers de sensores. Temperatura de CPU, timings, canais e SMART indisponíveis não são estimados a partir da utilização." Style="{StaticResource Note}"/><TextBlock Text="Capturas profundas e alterações protegidas solicitam autorização pelo UAC depois de uma ação manual. Alterar uma propriedade de rede pode exigir um reinício posterior autorizado separadamente." Style="{StaticResource Note}"/></StackPanel></Expander></StackPanel></Border>
                     </StackPanel></ScrollViewer>
                 </TabItem>
             </TabControl>
             <Border Grid.Row="3" BorderBrush="{StaticResource Stroke}" BorderThickness="0,1,0,0" Margin="24,8,24,0" Padding="0,12">
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Status}" Foreground="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Status}" Margin="0,0,16,0"/>
+                    <StackPanel Margin="0,0,16,0">
+                        <TextBlock Text="{Binding Notification}" Foreground="{StaticResource Accent}" FontSize="12" TextWrapping="Wrap" MaxHeight="48" ToolTip="{Binding Notification}"/>
+                        <TextBlock Text="{Binding Status}" Foreground="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding Status}" Margin="0,4,0,0"/>
+                    </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Visibility="{Binding IsBusy, Converter={StaticResource BooleanVisibility}}">
                         <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}" Width="110" Height="5" VerticalAlignment="Center" Foreground="{StaticResource Accent}" Background="{StaticResource SurfaceHigh}" BorderThickness="0" Margin="0,0,12,0"><ProgressBar.Style><Style TargetType="ProgressBar"><Style.Triggers><DataTrigger Binding="{Binding Progress}" Value="0"><Setter Property="IsIndeterminate" Value="True"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
                         <Button Content="Cancelar" Command="{Binding CancelCommand}" Style="{StaticResource QuietButton}" Margin="0" MinHeight="30" Padding="10,5"/>

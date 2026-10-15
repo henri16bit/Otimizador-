@@ -28,12 +28,14 @@ public sealed class ReversibleChangeEngine(IHistoryStore history)
     }
 
     public async Task<ChangeRecord> ApplyAsync(IReversibleOperation operation, string value,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? approvedOriginal = null)
     {
         await _gate.WaitAsync(cancellationToken);
         try
         {
             var preview = await PreviewAsync(operation, value, cancellationToken);
+            if (approvedOriginal is not null && !Equal(preview.Before, approvedOriginal))
+                throw new InvalidOperationException("A configuração mudou desde a revisão confirmada. Leia e revise novamente; nenhuma escrita foi executada.");
             var now = DateTimeOffset.UtcNow;
             var change = new ChangeRecord(Guid.NewGuid(), preview.Kind, preview.Target, preview.Before, preview.After,
                 preview.Risk, ChangeState.Prepared, now, now, RecoveryInstructions: preview.RecoveryInstructions);

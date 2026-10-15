@@ -8,6 +8,7 @@ namespace PCAnalyzer.App;
 
 public partial class App : Application
 {
+    private Mutex? _instanceLock;
     private readonly StartupDiagnostics _startup = new(Environment.GetCommandLineArgs().Skip(1).ToArray());
 
     public App()
@@ -27,6 +28,19 @@ public partial class App : Application
         try
         {
             base.OnStartup(e);
+            if (!_startup.IsSmokeTest)
+            {
+                var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName;
+                _instanceLock = new Mutex(false, "Local\\PCAnalyzer-" + sid);
+                var acquired = false;
+                try { acquired = _instanceLock.WaitOne(0); } catch (AbandonedMutexException) { acquired = true; }
+                if (!acquired)
+                {
+                    _instanceLock.Dispose(); _instanceLock = null;
+                    MessageBox.Show("O PC Analyzer já está aberto nesta conta. Use a janela existente para acompanhar os testes.", "PC Analyzer");
+                    Shutdown(); return;
+                }
+            }
             var backend = new ApplicationBackend();
             var window = new MainWindow(new MainViewModel(backend), initializeHardware: !_startup.IsSmokeTest);
             MainWindow = window;
@@ -38,6 +52,12 @@ public partial class App : Application
             _startup.ReportFailure(exception);
             Shutdown(1);
         }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        if (_instanceLock is not null) { _instanceLock.ReleaseMutex(); _instanceLock.Dispose(); _instanceLock = null; }
+        base.OnExit(e);
     }
 
     private async Task RunSmokeTestAsync(MainWindow window)

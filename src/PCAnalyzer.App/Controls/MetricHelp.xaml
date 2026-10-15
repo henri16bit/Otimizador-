@@ -1,0 +1,18 @@
+<UserControl x:Class="PCAnalyzer.App.Controls.MetricHelp"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Name="Help">
+ <StackPanel DataContext="{Binding Info, ElementName=Help}">
+  <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" TextWrapping="Wrap" ToolTip="{Binding Description}"/>
+  <TextBlock Text="{Binding Description}" Style="{StaticResource Note}" Margin="0,5,0,6"/>
+  <Expander Header="Entender esta métrica">
+   <StackPanel Margin="8,8,8,0">
+    <TextBlock Text="Por que importa" FontWeight="SemiBold"/><TextBlock Text="{Binding Importance}" Style="{StaticResource Note}"/>
+    <TextBlock Text="Como interpretar" FontWeight="SemiBold"/><TextBlock Text="{Binding Interpretation}" Style="{StaticResource Note}"/>
+    <TextBlock Text="O que influencia" FontWeight="SemiBold"/><TextBlock Text="{Binding Influences}" Style="{StaticResource Note}"/>
+    <TextBlock Text="Quando investigar" FontWeight="SemiBold"/><TextBlock Text="{Binding Investigate}" Style="{StaticResource Note}"/>
+    <TextBlock Text="Limitações" FontWeight="SemiBold"/><TextBlock Text="{Binding Limitations}" Style="{StaticResource Note}"/>
+    <TextBlock Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap"><Run Text="Unidade de origem: "/><Run Text="{Binding Unit, Mode=OneWay}"/><Run Text=" · identificador: "/><Run Text="{Binding Id, Mode=OneWay}"/></TextBlock>
+   </StackPanel>
+  </Expander>
+ </StackPanel>
+</UserControl>

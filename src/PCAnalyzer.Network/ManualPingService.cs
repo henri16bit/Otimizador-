@@ -8,7 +8,7 @@ namespace PCAnalyzer.Network;
 public sealed class ManualPingService
 {
     public async Task<PingMeasurement> RunAsync(string host, int count = 10, int timeoutMs = 1500,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IProgress<PingObservation>? progress = null)
     {
         ValidateHost(host);
         if (count is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(count), "Escolha 1 a 100 pacotes.");
@@ -60,13 +60,14 @@ public sealed class ManualPingService
             {
                 observations.Add(new(i + 1, timestamp, "LocalError", null, ex.InnerException?.Message ?? ex.Message));
             }
+            progress?.Report(observations[^1]);
             if (i + 1 < count)
             {
                 try { await Task.Delay(250, cancellationToken); }
                 catch (OperationCanceledException) { cancelled = true; break; }
             }
         }
-        return Summarize(host, started, count, observations, cancelled);
+        return Summarize(host, started, count, observations, cancelled) with { ResolvedAddress = destination.ToString() };
     }
 
     public static PingMeasurement Summarize(string host, DateTimeOffset started, int requestedCount,

@@ -7,7 +7,7 @@ using PCAnalyzer.Core;
 namespace PCAnalyzer.Storage;
 
 /// <summary>Durable local history. Each replacement is atomic; measurement metadata remains intact.</summary>
-public sealed class SQLiteHistoryStore : IHistoryStore
+public sealed class SQLiteHistoryStore : IHistoryStore, ITestHistoryStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -53,7 +53,7 @@ public sealed class SQLiteHistoryStore : IHistoryStore
             await using (var version = connection.CreateCommand())
             {
                 version.CommandText = "PRAGMA user_version;";
-                if (Convert.ToInt64(await version.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) > 1)
+                if (Convert.ToInt64(await version.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) > 2)
                     throw new InvalidDataException("O histórico foi criado por uma versão mais recente do aplicativo.");
             }
             await using (var journal = connection.CreateCommand())
@@ -88,7 +88,13 @@ public sealed class SQLiteHistoryStore : IHistoryStore
                     payload_json TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_changes_created ON changes(created_unix_ms DESC, id);
-                PRAGMA user_version=1;
+                CREATE TABLE IF NOT EXISTS test_runs (
+                    id TEXT PRIMARY KEY NOT NULL, test_id TEXT NOT NULL, name TEXT NOT NULL,
+                    status TEXT NOT NULL, started_at TEXT NOT NULL, started_unix_ms INTEGER NOT NULL,
+                    ended_at TEXT, summary TEXT, payload_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_tests_started ON test_runs(started_unix_ms DESC, id);
+                PRAGMA user_version=2;
                 """;
             await schema.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -99,6 +105,53 @@ public sealed class SQLiteHistoryStore : IHistoryStore
 
     public Task SaveSessionAsync(DiagnosticSession session, CancellationToken cancellationToken = default) =>
         Task.Run(() => SaveSessionCoreAsync(session, cancellationToken), cancellationToken);
+
+    public Task SaveTestAsync(TestSession session, CancellationToken ct = default) => Task.Run(async () =>
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var payload = JsonSerializer.Serialize(session, JsonOptions);
+        await InitializeCoreAsync(ct).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO test_runs(id,test_id,name,status,started_at,started_unix_ms,ended_at,summary,payload_json)
+            VALUES($id,$test,$name,$status,$start,$ms,$end,$summary,$payload)
+            ON CONFLICT(id) DO UPDATE SET status=excluded.status,ended_at=excluded.ended_at,
+                summary=excluded.summary,payload_json=excluded.payload_json;
+            """;
+        command.Parameters.AddWithValue("$id", session.Id.ToString("D"));
+        command.Parameters.AddWithValue("$test", session.TestId);
+        command.Parameters.AddWithValue("$name", session.Name);
+        command.Parameters.AddWithValue("$status", session.Status.ToString());
+        command.Parameters.AddWithValue("$start", Timestamp(session.StartedAt));
+        command.Parameters.AddWithValue("$ms", session.StartedAt.ToUnixTimeMilliseconds());
+        command.Parameters.AddWithValue("$end", (object?)session.EndedAt?.ToString("O", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        command.Parameters.AddWithValue("$summary", (object?)(session.Error ?? session.Result?.Title) ?? DBNull.Value);
+        command.Parameters.AddWithValue("$payload", payload);
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }, ct);
+
+    public Task<TestSession?> LoadTestAsync(Guid id, CancellationToken ct = default) => Task.Run(async () =>
+    {
+        var json = await LoadPayloadAsync("SELECT payload_json FROM test_runs WHERE id=$id;", id, ct).ConfigureAwait(false);
+        return json is null ? null : Deserialize<TestSession>(json);
+    }, ct);
+
+    public Task<IReadOnlyList<TestRunSummary>> ListTestsAsync(int limit = 100, CancellationToken ct = default) => Task.Run<IReadOnlyList<TestRunSummary>>(async () =>
+    {
+        if (limit <= 0) return [];
+        await InitializeCoreAsync(ct).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id,test_id,name,status,started_at,ended_at,summary FROM test_runs ORDER BY started_unix_ms DESC,id LIMIT $limit;";
+        command.Parameters.AddWithValue("$limit", Math.Min(limit, 1000));
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var runs = new List<TestRunSummary>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            runs.Add(new(Guid.Parse(reader.GetString(0)), reader.GetString(1), reader.GetString(2), Enum.Parse<TestStatus>(reader.GetString(3)),
+                ParseTimestamp(reader.GetString(4)), reader.IsDBNull(5) ? null : ParseTimestamp(reader.GetString(5)), reader.IsDBNull(6) ? null : reader.GetString(6)));
+        return runs;
+    }, ct);
 
     private async Task SaveSessionCoreAsync(DiagnosticSession session, CancellationToken cancellationToken = default)
     {

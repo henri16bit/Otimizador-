@@ -1,5 +1,7 @@
 # Progresso da implementação
 
+Atualização de 15/10/2026: dashboard com execução integrada, histórico persistente de testes, ajuda de métricas, leitura de rede por adaptador, prévia vinculada ao valor original e relatórios estruturados foram implementados. Há triagem de ping, recorrência DPC e frames, além de correlação limitada a amostras com UTC conhecido. Consulte [UX-AUDIT.md](UX-AUDIT.md) para arquivos, testes e limitações por fase. A tabela abaixo documenta a entrega inicial; os itens avançados de hardware e a validação no PC alvo continuam pendentes.
+
 O repositório contém código executável, interface WPF e integrações reais. A implementação avançou por módulos funcionais, mas **os critérios de aceitação dependentes de Windows/hardware ainda não foram demonstrados**. Este registro distingue código implementado, testes de processamento e validação operacional.
 
 Resultados efetivamente executados no ambiente de desenvolvimento devem ser consultados em [VALIDATION.md](VALIDATION.md). O roteiro que ainda deve ser executado no computador alvo está em [WINDOWS-VALIDATION.md](WINDOWS-VALIDATION.md). Dados sintéticos aparecem somente na suíte de testes; não são exibidos como hardware real pela aplicação.

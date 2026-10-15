@@ -7,6 +7,14 @@ namespace PCAnalyzer.Tests;
 public sealed class OptimizationNetworkTests
 {
     [Fact]
+    public async Task ChangeSinceUserApprovedPreviewNeverWritesOrRebasesBackupSilently()
+    {
+        var history = new FakeHistory(); var engine = new ReversibleChangeEngine(history); var operation = new FakeOperation();
+        var preview = await engine.PreviewAsync(operation, "new"); operation.Current = "third";
+        await Assert.ThrowsAsync<InvalidOperationException>(() => engine.ApplyAsync(operation, "new", approvedOriginal: preview.Before));
+        Assert.Equal(0, operation.Writes); Assert.Empty(history.Saves); Assert.Equal("third", operation.Current);
+    }
+    [Fact]
     public async Task BackupCommitFailurePreventsEveryWrite()
     {
         var store = new FakeHistory { BeforeSave = _ => throw new IOException("disk full") };

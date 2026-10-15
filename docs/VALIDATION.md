@@ -1,8 +1,24 @@
-# Validação executada — 14/10/2026
+# Validação executada — revisão de 15/10/2026
 
 Ambiente: Debian 13 x64, SDK .NET 10.0.402 (runtime 10.0.13). O SDK foi baixado de `builds.dotnet.microsoft.com` e verificado por SHA-512 contra o manifesto oficial. Pacotes NuGet restaurados com verificação normal de TLS/assinaturas; versões e hashes estão nos lockfiles.
 
-## Revisão da interface
+## Diagnósticos integrados e rede
+
+A revisão adiciona histórico estruturado de testes, estados/progresso no dashboard, ajuda de métricas, rede por adaptador e interpretação contextual. A solução agora tem 13 projetos, incluindo um executável separado de cenários WPF. O relatório por fase está em [UX-AUDIT.md](UX-AUDIT.md).
+
+Validação local: restore travado, compilação Release com avisos tratados como erros e **142 testes C#**, sem falhas ou ignorados. Resultado: `artifacts/test-results/diagnostics-refactor.trx`. Os cinco testes Python de pacote e cinco cenários PowerShell de publicação são verificados separadamente. Nenhuma configuração de hardware é alterada por essas suítes.
+
+O workflow de release bloqueia a publicação até executar no Windows os cenários WPF de progresso, navegação durante teste, conclusão sem troca de página, cancelamento, falha, reabertura do SQLite e rede com propriedade somente leitura. Depois abre o aplicativo empacotado nas oito páginas e sete abas internas, inclusive tamanho compacto. Os registros por commit ficam em `refs/notes/pcanalyzer-releases`; as capturas ficam nos artefatos e nas notas `pcanalyzer-ui-preview`, `pcanalyzer-network-preview` e `pcanalyzer-flow-preview`. Os cenários de UI usam fixtures explícitas, sem coleta ou alteração real do sistema.
+
+Comando dos cenários em Windows, após o build:
+
+```powershell
+dotnet run --project tests/PCAnalyzer.WpfHarness/PCAnalyzer.WpfHarness.csproj -c Release --no-build --no-restore -- --smoke-test --smoke-output artifacts/ui-flow-startup.json
+```
+
+A aprovação de um workflow confirma apenas os checks executados naquele commit. Sensores, driver da rede, UAC, ETW/PresentMon, overhead e Windows 10 Pro 22H2 do computador alvo continuam sujeitos à validação local.
+
+## Histórico: revisão anterior da interface (14/10)
 
 A suíte portátil passou a **116 casos aprovados**, incluindo apresentação de unidades sem modificar as amostras, RAM física sincronizada, leituras indisponíveis, precisão de valores pequenos, escala dos gráficos e recebimento identificado de um único adaptador. Os cinco testes Python de pacote e os cinco cenários PowerShell isolados de publicação também passaram. O resultado C# está em `artifacts/test-results/interface.trx`.
 
@@ -10,7 +26,7 @@ O workflow de release verifica no Windows as oito páginas, sete abas internas, 
 
 A versão anterior `v0.1.0-preview.4` já teve abertura/renderização/fechamento confirmados no runner Windows, com [registro da execução](https://github.com/henri16bit/Otimizador-/actions/runs/38617713687) e ZIP/SHA256 publicados. Isso não valida sensores, alterações administrativas, ETW/PresentMon ou o Windows 10 Pro 22H2 do computador alvo.
 
-## Validação da implementação inicial
+## Histórico: validação da implementação inicial
 
 | Verificação | Resultado observado |
 | --- | --- |
@@ -52,6 +68,6 @@ O ZIP é distribuição portátil sem assinatura/instalador. Build e pacote não
 - Estatísticas evitam overflow para números finitos; FPS que não cabe em número finito fica indisponível.
 - Scripts de publicação usam dependências travadas, verificam PE x64/runtimes/arquivos necessários e regeneram ZIP e hashes após mudanças.
 
-Não foram validados neste ambiente: execução visual WPF, descoberta do computador informado, sensores NVIDIA reais, contadores localizados, capture/cleanup ETW, PresentMon/Vanguard, UAC, aplicação/restauração de energia/rede, overhead em jogos, comparação com instrumentos de referência ou compatibilidade operacional no Windows 10 Pro 22H2. Siga [WINDOWS-VALIDATION.md](WINDOWS-VALIDATION.md) e [verify.md](verify.md).
+Na implementação inicial, não foram validados: execução visual WPF, descoberta do computador informado, sensores NVIDIA reais, contadores localizados, capture/cleanup ETW, PresentMon/Vanguard, UAC, aplicação/restauração de energia/rede, overhead em jogos, comparação com instrumentos de referência ou compatibilidade operacional no Windows 10 Pro 22H2. As verificações de interface posteriores estão descritas acima; o restante segue o roteiro [WINDOWS-VALIDATION.md](WINDOWS-VALIDATION.md) e [verify.md](verify.md).
 
 A entrega inicial foi criada em um checkout sem commits. A revisão é preparada para envio à branch `main`; o SHA enviado é confirmado pelo Git no relatório final da tarefa. Os arquivos grandes em `artifacts/` ficam fora do commit e são reproduzíveis pelos scripts. A configuração cloud é um rascunho; publicação do ambiente e restauração numa nova tarefa não foram validadas aqui.

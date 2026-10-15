@@ -12,6 +12,12 @@ foreach ($property in $steps.PSObject.Properties) {
 }
 $smoke = Get-ChildItem artifacts/startup-smoke-*.json -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
 if ($smoke) { $result['startup'] = Get-Content -LiteralPath $smoke.FullName -Raw | ConvertFrom-Json }
+if (Test-Path -LiteralPath artifacts/ui-flow-result.json) {
+    $result['uiFlows'] = Get-Content -LiteralPath artifacts/ui-flow-result.json -Raw | ConvertFrom-Json
+}
+if (Test-Path -LiteralPath artifacts/ui-flow-startup.json) {
+    $result['uiFlowStartup'] = Get-Content -LiteralPath artifacts/ui-flow-startup.json -Raw | ConvertFrom-Json
+}
 if (Test-Path -LiteralPath artifacts/release-publication.json) {
     $result['publication'] = Get-Content -LiteralPath artifacts/release-publication.json -Raw | ConvertFrom-Json
 }
@@ -27,9 +33,15 @@ git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users
 if ($LASTEXITCODE) { throw 'Não foi possível registrar o resultado.' }
 git push origin refs/notes/pcanalyzer-releases
 if ($LASTEXITCODE) { throw 'Não foi possível enviar o resultado Git.' }
-$preview = Get-ChildItem artifacts/startup-smoke-*-overview.png -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
-if ($preview) {
-    $previewRef = 'refs/notes/pcanalyzer-ui-preview'
+$previews = @{
+    'pcanalyzer-ui-preview' = 'artifacts/startup-smoke-*-overview.png'
+    'pcanalyzer-network-preview' = 'artifacts/startup-smoke-*-investigar.png'
+    'pcanalyzer-flow-preview' = 'artifacts/ui-flow-screenshot-*.png'
+}
+foreach ($name in $previews.Keys) {
+    $preview = Get-ChildItem $previews[$name] -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+    if (-not $preview) { continue }
+    $previewRef = 'refs/notes/' + $name
     $remote = git ls-remote origin $previewRef
     if ($LASTEXITCODE) { throw 'Não foi possível consultar a prévia da interface.' }
     if ($remote) {
@@ -38,7 +50,7 @@ if ($preview) {
     }
     $blob = git hash-object -w -- $preview.FullName
     if ($LASTEXITCODE) { throw 'Não foi possível preparar a captura da interface.' }
-    git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com notes --ref=pcanalyzer-ui-preview add -f -C $blob HEAD
+    git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com notes --ref=$name add -f -C $blob HEAD
     if ($LASTEXITCODE) { throw 'Não foi possível registrar a captura da interface.' }
     git push origin $previewRef
     if ($LASTEXITCODE) { throw 'Não foi possível enviar a captura da interface.' }

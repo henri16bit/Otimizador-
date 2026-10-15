@@ -13,6 +13,18 @@ public static class ReportPrivacy
 {
     private const string Redacted = "[redigido]";
 
+    internal static Func<string, string> CreateTextRedactor(DiagnosticSession session)
+    {
+        var identifiers = session.Inventory.Components.Select(c => c.Id)
+            .Concat(session.Inventory.Components.SelectMany(c => c.Facts).Where(f => IsPrivateFact(f.Name)).Select(f => f.Value))
+            .Concat([Environment.MachineName, Environment.UserName, session.Context.HardwareFingerprint])
+            .Where(s => !string.IsNullOrWhiteSpace(s) && s.Length >= 3).Select(s => s!).Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(s => s.Length).ToArray();
+        var known = identifiers.Length == 0 ? null : new Regex(string.Join("|", identifiers.Select(Regex.Escape)),
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+        return text => ScrubText(known?.Replace(text, Redacted) ?? text);
+    }
+
     public static DiagnosticSession Anonymize(DiagnosticSession session)
     {
         ArgumentNullException.ThrowIfNull(session);

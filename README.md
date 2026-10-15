@@ -62,15 +62,21 @@ Se o aplicativo encerrar ao abrir, consulte `%LOCALAPPDATA%\PCAnalyzer\logs\star
 
 ## Uso inicial
 
-1. Abra como usuário normal. **Visão geral** mostra CPU, RAM física usada, GPU e recebimento de um adaptador de rede, com as leituras reais disponíveis e atalhos por tipo de problema. Dados ausentes aparecem com `—`.
-2. Em **Componentes**, escolha CPU, GPU, RAM, discos ou rede. Busque uma leitura e selecione-a para ver o gráfico. Origem, método, limitações e inventário ficam nos detalhes expansíveis.
+1. Abra como usuário normal. **Visão geral** mostra CPU, RAM física usada, GPU, rede e o diagnóstico rápido. Escolha um teste, leia o objetivo e clique em **Iniciar diagnóstico**. Acompanhe etapa, tempo, cancelamento e resultado nessa tela. Dados ausentes aparecem com `—`.
+2. Em **Componentes**, escolha CPU, GPU, RAM, discos ou rede. Cada disco físico tem seleção própria. Uma leitura abre gráfico, janela temporal e **Entender esta métrica**, com significado, interpretação, influências e limites. Origem, método e timestamp continuam acessíveis.
 3. Em **Processos**, busque um aplicativo por nome/PID e ordene CPU ou memória pelo cabeçalho. A seleção leva à investigação de frames desse processo.
 4. Em **Investigar**, escolha Rede, Jogos, Travadas e drivers ou Testes rápidos. Cada captura/teste ativo começa somente pelos comandos e confirmações correspondentes.
-5. **Resultados** reúne observações da triagem, o último teste e fontes disponíveis. Ao concluir uma operação, seu resultado abre automaticamente. As observações não são uma garantia de saúde do hardware.
+5. **Resultados** reúne observações, detalhes do teste e fontes. O resumo atualiza automaticamente na **Visão geral**, sem mudar a página. **Abrir resultado detalhado** mostra indicadores, gráficos, evidências e limitações. Falhas e cancelamentos também ficam registrados.
 6. Em **Histórico**, descreva a carga e as condições, salve sessões, compare antes/depois e exporte HTML, CSV ou JSON. Uma sessão salva tem uma faixa visível com a opção **Voltar ao vivo**.
 7. **Ajustes** permite ler, revisar e confirmar uma mudança de energia/rede por vez e restaurar o valor anterior. **Configurações** reúne perfil, intervalo, armazenamento e limites da coleta.
 
 A interface usa um único menu lateral e ajusta o tamanho inicial à área útil da tela. As unidades legíveis são conversões de apresentação; valores e unidades originais permanecem nas sessões e relatórios. A RAM do resumo é derivada de memória física total/disponível sincronizadas, não de commit. A rede mostra o adaptador com maior recebimento medido, identificado no cartão; não soma tráfego possivelmente duplicado por VPNs.
+
+Em **Investigar → Rede**, siga três passos: **Detectar conexões**, escolher o adaptador e **Ler detalhes**; **Iniciar 20 pings** para o gateway ou destino; consultar as propriedades e só então revisar um ajuste. Propriedades sem valores reversíveis divulgados pelo driver ficam como **Somente leitura**. O programa consulta RSS, energia, driver, link, contadores e propriedades do adaptador selecionado. Gateway usa essa seleção; outro destino segue a rota do Windows.
+
+O **Histórico de diagnósticos** guarda automaticamente resultados estruturados, gráficos, erros e cancelamentos. É possível reabrir, comparar execuções do mesmo teste e exportar HTML/JSON. Uma mudança de destino, arquivo ou método impede comparação enganosa. Sessões de telemetria e seus relatórios continuam disponíveis abaixo. Dados antigos são preservados pela migração SQLite; JSONs avulsos de versões anteriores continuam na pasta `results`, acessível por **Abrir pasta de dados e logs**.
+
+Há uma execução manual por vez. Navegar preserva a coleta e o teste. A análise do sistema observa 15 s com cadência alvo temporária de 1 s e depois restaura o perfil. Nunca inicia carga pesada na abertura. Encerramento cancela tarefas; uma execução anterior sem fim registrado aparece como falha interrompida, com duração desconhecida.
 
 O perfil **Leve** usa intervalo alvo de 5 s e o **Avançado**, 1 s; o intervalo pode ser ajustado entre 1 e 60 s. Ao minimizar, a cadência passa a no mínimo 15 s. A interface atualiza independentemente, aproximadamente uma vez por segundo. O buffer retém até 30.000 amostras totais, registra descartes nas notas da sessão e mostra até 600 pontos da série selecionada. O modo profundo é uma captura manual limitada, não um coletor permanente.
 
@@ -126,9 +132,9 @@ Reiniciar o adaptador ou computador é uma ação separada e pode ser necessári
 
 ## Limitações e próximos módulos
 
-Permanecem pendentes: validação real no Windows alvo; temperatura/frequência efetiva e throttling de CPU; leitura SPD/timings/XMP/canais; SMART/desgaste/temperatura NVMe; atribuição de threads/agendamento por ETW; correlação automática entre frames, ETW e telemetria; baseline de desempenho esperado por modelo; benchmark CPU multithread, GPU/stress e gravação de disco; rede sob carga; installer/assinatura e medição de overhead em partidas reais.
+Permanecem pendentes: validação real no Windows alvo; temperatura/frequência efetiva e throttling de CPU; leitura SPD/timings/XMP/canais; SMART/desgaste/temperatura NVMe; atribuição de threads/agendamento por ETW; alinhamento automático de capturas em relógios relativos; baseline de desempenho esperado por modelo; benchmark CPU multithread, GPU/stress e gravação de disco; rede sob carga; installer/assinatura e medição de overhead em partidas reais.
 
-Os relatórios de sessão já incluem as alterações associadas, mas não incorporam automaticamente todo artefato separado de ETW, frames, laboratório e comparação numa narrativa única. Esses resultados locais têm sua própria persistência, e sua integração em um relatório de investigação completo é trabalho futuro. Não existe medição de input lag físico clique-para-fóton, polling real do mouse ou escore universal de latência do PC.
+Relatórios de teste incluem indicadores, séries retidas, evidências, recomendações, limitações e contexto da telemetria. O resultado bruto separado continua preservado em `results`. Correlação examina janelas UTC de ±250 ms apenas quando frames têm data/hora e offset conhecidos; médias de até 1 s e eventos ETW são apresentados como proximidade temporal, sem afirmar causalidade. CSV com QPC/data local permite informar frequência/offset da captura. Relógios relativos sem âncora ficam explicitamente sem correlação. Não existe medição de input lag físico clique-para-fóton, polling real do mouse ou escore universal de latência do PC.
 
 ## Estrutura e documentação
 

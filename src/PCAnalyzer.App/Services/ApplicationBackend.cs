@@ -24,6 +24,7 @@ public sealed class ApplicationBackend : IApplicationBackend
     private readonly ReversibleChangeEngine _changes;
     private readonly DiagnosticRuleEngine _rules = new();
     private readonly SemaphoreSlim _telemetryGate = new(1, 1);
+    private ChangePreview? _powerPreview, _networkPreview;
     public string DataDirectory { get; }
 
     public ApplicationBackend()
@@ -58,6 +59,9 @@ public sealed class ApplicationBackend : IApplicationBackend
         await _history.SaveSessionAsync(await WithChangesAsync(session, ct), ct);
     public Task<IReadOnlyList<SessionSummary>> ListSessionsAsync(CancellationToken ct) => _history.ListSessionsAsync(100, ct);
     public Task<DiagnosticSession?> LoadSessionAsync(Guid id, CancellationToken ct) => _history.LoadSessionAsync(id, ct);
+    public Task SaveTestAsync(TestSession session, CancellationToken ct = default) => _history.SaveTestAsync(session, ct);
+    public Task<TestSession?> LoadTestAsync(Guid id, CancellationToken ct = default) => _history.LoadTestAsync(id, ct);
+    public Task<IReadOnlyList<TestRunSummary>> ListTestsAsync(int limit = 100, CancellationToken ct = default) => _history.ListTestsAsync(limit, ct);
     public async Task ExportAsync(DiagnosticSession session, string path, string format, bool anonymize, CancellationToken ct) =>
         await ReportExporter.ExportAsync(await WithChangesAsync(session, ct), path, Enum.Parse<ReportFormat>(format, true), anonymize, ct);
     private async Task<DiagnosticSession> WithChangesAsync(DiagnosticSession session, CancellationToken ct)
@@ -80,17 +84,20 @@ public sealed class ApplicationBackend : IApplicationBackend
         return new("Performance Comparison", lines);
     }
 
-    public async Task<TechnicalResult> PingAsync(string host, CancellationToken ct)
+    public async Task<TechnicalResult> PingAsync(string host, Guid? adapterId, IProgress<TestProgress> progress, CancellationToken ct)
     {
         if (host.Trim().Equals("gateway", StringComparison.OrdinalIgnoreCase))
         {
             var snapshot = await _network.DiscoverAsync(ct);
-            host = snapshot.Adapters.Where(a => a.Status == "Up").SelectMany(a => a.Gateways).FirstOrDefault()
-                ?? throw new InvalidOperationException("Nenhum gateway foi identificado no adaptador ativo.");
+            host = GatewaySelection.Select(snapshot, adapterId);
         }
-        var result = await new ManualPingService().RunAsync(host, 20, 1500, ct);
+        progress.Report(new("Resolvendo destino e iniciando ICMP"));
+        var result = await new ManualPingService().RunAsync(host, 20, 1500, ct, new InlineProgress<PingObservation>(o =>
+            progress.Report(new($"Pacote {o.Sequence} de 20", o.Sequence / 20d, o.Sequence,
+                o.RoundTripMilliseconds is { } rtt ? $"Última resposta: {rtt:0.###} ms" : "Sem resposta válida: " + o.Status))));
         await SaveArtifactAsync("ping", result, CancellationToken.None);
         var lines = new List<string> {
+            $"Destino: {result.Host}; endereço resolvido: {result.ResolvedAddress ?? "indisponível"}. Rota escolhida pelo Windows.",
             $"Pacotes concluídos: {result.SentCount}; respostas: {result.ReceivedCount}; ausência de resposta ICMP: {N(result.LossPercent)}%",
             $"RTT min/média/max: {N(result.MinimumRttMs)}/{N(result.AverageRttMs)}/{N(result.MaximumRttMs)} ms; p95: {N(result.P95RttMs)} ms",
             $"Jitter: {N(result.JitterMs)} ms. {PingMeasurement.JitterDefinition}", result.Limitation,
@@ -100,48 +107,61 @@ public sealed class ApplicationBackend : IApplicationBackend
             "ms", "System.Net.NetworkInformation.Ping", "ICMP Echo; RTT do Windows, resolução em ms", o.Timestamp,
             TimeSpan.Zero, o.RoundTripMilliseconds.HasValue ? Availability.Available : Availability.ReadError,
             Limitation: result.Limitation)).ToArray();
-        return new("Teste manual de rede", lines, metrics);
+        return new("Teste manual de rede", lines, metrics,
+            [new("Resposta do destino (ICMP)", "ms", result.Observations.Select(o => new RelativePoint((o.Timestamp - result.StartedAt).TotalMilliseconds, o.RoundTripMilliseconds)).ToArray(),
+                "Milissegundos desde o início do teste", "System.Net.NetworkInformation.Ping")],
+            [new("network.ping.rtt.ms", "RTT médio", result.AverageRttMs, "ms", "Ida e volta ao destino selecionado"),
+             new("network.ping.jitter.ms", "Variação (jitter)", result.JitterMs, "ms", PingMeasurement.JitterDefinition),
+             new("network.ping.loss.percent", "Sem resposta ICMP", result.LossPercent, "%", "Não comprova perda dentro do jogo"),
+             new("network.ping.responses", "Respostas recebidas", result.ReceivedCount, "pacotes", $"{result.SentCount} pacotes concluídos")],
+            Findings: PingInterpretation.Analyze(result), Limitations: [result.Limitation],
+            Availability: result.SentCount == 0 ? Availability.ReadError : Availability.Available, Cancelled: result.Cancelled,
+            ComparisonKey: result.ResolvedAddress is { } ip ? "icmp:" + ip + ":20:32bytes:1500ms" : null);
     }
 
-    public async Task<IReadOnlyList<NetworkSettingView>> ListNetworkSettingsAsync(CancellationToken ct)
-    {
-        var snapshot = await _network.DiscoverAsync(ct);
-        var result = new List<NetworkSettingView>();
-        foreach (var adapter in snapshot.Adapters)
-        {
-            ct.ThrowIfCancellationRequested();
-            var detail = await _network.InspectAdapterAsync(adapter.InterfaceGuid, ct);
-            result.Add(new(adapter.InterfaceGuid.ToString("D"), adapter.Name, "", "Identificação / RSS / estatísticas", "", [],
-                $"{detail.Description}\nInterfaceGuid: {detail.InterfaceGuid:D}\nDriver: {detail.DriverInformation}, versão {detail.DriverVersion}, data {detail.DriverDate}\nLink: {detail.LinkSpeed ?? adapter.SpeedBitsPerSecond?.ToString() ?? "indisponível"}\n" +
-                string.Join("\n", detail.Rss.Concat(detail.Statistics).Select(f => f.Name + ": " + (f.Value ?? "indisponível") + " [" + f.Source + "] " + f.Limitation)) +
-                "\n" + string.Join("\n", detail.Limitations)));
-            foreach (var property in detail.AdvancedProperties)
-            {
-                var values = property.CanChange ? property.ValidRegistryValues.Select((v, i) => new SelectionItem(
-                    NetworkPropertyOperation.SerializeValue(v), i < property.ValidDisplayValues.Count ? property.ValidDisplayValues[i] + " [" + v + "]" : v)).ToArray() : [];
-                result.Add(new(adapter.InterfaceGuid.ToString("D"), adapter.Name, property.RegistryKeyword, property.DisplayName,
-                    NetworkPropertyOperation.SerializeValues(property.RegistryValues), values,
-                    $"{property.Function}\n{property.Consequences}\n{property.Recommendation}\n{property.ExpectedImpact}\nDriver: {detail.DriverVersion ?? "indisponível"}. -NoRestart: gravar não comprova ativação; pode exigir reinício manual."));
-            }
-            if (detail.AdvancedProperties.Count == 0)
-                result.Add(new(adapter.InterfaceGuid.ToString("D"), adapter.Name, "", "Propriedades indisponíveis", "", [],
-                    string.Join("; ", detail.Limitations)));
-        }
-        return result;
-    }
+    public Task<NetworkSnapshot> DiscoverNetworkAsync(CancellationToken ct) => _network.DiscoverAsync(ct);
+    public Task<AdapterDetail> InspectNetworkAsync(Guid id, CancellationToken ct) => _network.InspectAdapterAsync(id, ct);
+    public IReadOnlyList<NetworkSettingView> NetworkSettingsFor(AdapterDetail detail) =>
+        detail.AdvancedProperties.Select(property => new NetworkSettingView(detail.InterfaceGuid.ToString("D"), detail.Name,
+            property.RegistryKeyword, string.IsNullOrWhiteSpace(property.DisplayName) ? property.RegistryKeyword : property.DisplayName,
+            NetworkPropertyOperation.SerializeValues(property.RegistryValues),
+            property.CanChange ? property.ValidRegistryValues.Select((v, i) => new SelectionItem(NetworkPropertyOperation.SerializeValue(v),
+                i < property.ValidDisplayValues.Count && !string.IsNullOrWhiteSpace(property.ValidDisplayValues[i]) ? property.ValidDisplayValues[i] : v)).ToArray() : [],
+            $"{property.Function}\n{property.Consequences}\n{property.Recommendation}\n{property.ExpectedImpact}\nDriver: {detail.DriverVersion ?? "indisponível"}. O valor é gravado sem reiniciar; ativação pode exigir reinício manual.",
+            property.DisplayValue ?? string.Join(", ", property.RegistryValues),
+            property.CanChange ? "Disponível para revisão" : "Somente leitura · driver não oferece valores reversíveis")
+        ).ToArray();
 
     public Task<IReadOnlyList<SelectionItem>> ListPowerPlansAsync(CancellationToken ct) => Task.Run<IReadOnlyList<SelectionItem>>(() =>
         PowerPlans.List().Select(p => new SelectionItem(p.Id.ToString("D"), p.Name + (p.IsActive ? " (ativo)" : ""))).ToArray(), ct);
-    public async Task<string> PreviewPowerPlanAsync(string id, CancellationToken ct) =>
-        Describe(await _changes.PreviewAsync(new PowerPlanOperation(), Guid.Parse(id).ToString("D"), ct)) +
-        "\nUm plano diferente pode aumentar consumo, temperatura ou ruído. Benefício em jogos não é garantido; compare antes/depois.";
-    public Task<ChangeRecord> ApplyPowerPlanAsync(string id, CancellationToken ct) => _changes.ApplyAsync(
-        new ElevatedOperation(new PowerPlanOperation(), (value, original) => new(PrivilegedAction.SetPowerPlan,
-            DateTimeOffset.UtcNow, Guid.Parse(value), Value: value, ExpectedOriginal: original)), Guid.Parse(id).ToString("D"), ct);
-    public async Task<string> PreviewNetworkChangeAsync(NetworkSettingView setting, string value, CancellationToken ct) =>
-        Describe(await _changes.PreviewAsync(NetworkOperation(setting), value, ct)) + "\n" + setting.Explanation;
-    public Task<ChangeRecord> ApplyNetworkChangeAsync(NetworkSettingView setting, string value, CancellationToken ct) =>
-        _changes.ApplyAsync(ElevateNetwork(NetworkOperation(setting)), value, ct);
+    public async Task<string> PreviewPowerPlanAsync(string id, CancellationToken ct)
+    {
+        _powerPreview = null;
+        _powerPreview = await _changes.PreviewAsync(new PowerPlanOperation(), Guid.Parse(id).ToString("D"), ct);
+        return Describe(_powerPreview) + "\nMotivo: experimento manual solicitado. Sem melhoria comprovada.\nUm plano diferente pode aumentar consumo, temperatura ou ruído. Compare antes/depois; não exige reinício.";
+    }
+    public Task<ChangeRecord> ApplyPowerPlanAsync(string id, CancellationToken ct)
+    {
+        var preview = _powerPreview ?? throw new InvalidOperationException("Revise o plano antes de aplicar."); _powerPreview = null;
+        var value = Guid.Parse(id).ToString("D");
+        if (preview.After != value) throw new InvalidOperationException("O plano selecionado mudou. Revise novamente.");
+        return _changes.ApplyAsync(new ElevatedOperation(new PowerPlanOperation(), (destination, original) => new(PrivilegedAction.SetPowerPlan,
+            DateTimeOffset.UtcNow, Guid.Parse(destination), Value: destination, ExpectedOriginal: original)), value, ct, preview.Before);
+    }
+    public async Task<string> PreviewNetworkChangeAsync(NetworkSettingView setting, string value, CancellationToken ct)
+    {
+        _networkPreview = null;
+        _networkPreview = await _changes.PreviewAsync(NetworkOperation(setting), value, ct);
+        return $"Adaptador: {setting.AdapterName}\nPropriedade: {setting.Name}\nAtual exibido: {setting.CurrentDisplayValue}\n" + Describe(_networkPreview) +
+            "\nMotivo: experimento manual. Uma recomendação de benefício requer comparação medida.\n" + setting.Explanation;
+    }
+    public Task<ChangeRecord> ApplyNetworkChangeAsync(NetworkSettingView setting, string value, CancellationToken ct)
+    {
+        var preview = _networkPreview ?? throw new InvalidOperationException("Revise a propriedade antes de aplicar."); _networkPreview = null;
+        var operation = NetworkOperation(setting);
+        if (preview.Target != operation.Target || preview.After != value) throw new InvalidOperationException("A seleção mudou. Revise novamente.");
+        return _changes.ApplyAsync(ElevateNetwork(operation), value, ct, preview.Before);
+    }
     public Task<IReadOnlyList<ChangeRecord>> ListChangesAsync(CancellationToken ct) => _history.ListChangesAsync(ct);
     public async Task<ChangeRecord> RestoreChangeAsync(Guid id, CancellationToken ct)
     {
@@ -160,9 +180,9 @@ public sealed class ApplicationBackend : IApplicationBackend
         return await _changes.RestoreAsync(id, operation, ct);
     }
 
-    public async Task<TechnicalResult> ImportFramesAsync(string path, CancellationToken ct)
+    public async Task<TechnicalResult> ImportFramesAsync(string path, PresentMonParseOptions options, CancellationToken ct)
     {
-        var result = await new PresentMonCsvParser().ImportFileAsync(path, cancellationToken: ct);
+        var result = await new PresentMonCsvParser().ImportFileAsync(path, options, ct);
         await SaveArtifactAsync("frames", result, ct);
         return DescribeFrames(result);
     }
@@ -178,8 +198,8 @@ public sealed class ApplicationBackend : IApplicationBackend
             var description = DescribeFrames(result.Import);
             return description with { Lines = new[] { result.Detail, "CSV real preservado localmente. Nenhuma garantia de compatibilidade com Vanguard." }.Concat(description.Lines).ToArray() };
         }
-        return new("Game Session Analyzer", [result.Status + ": " + result.Detail, result.Tool?.Detail ?? "Ferramenta não validada",
-            "Não existe captura válida para apresentar. Nenhum dado foi inventado."]);
+        return new("Captura de jogo sem resultado válido", [result.Status + ": " + result.Detail, result.Tool?.Detail ?? "Ferramenta não validada",
+            "Não existe captura válida para apresentar."], Availability: result.Status, Limitations: [result.Detail]);
     }
     private static TechnicalResult DescribeFrames(PresentMonImportResult result)
     {
@@ -195,11 +215,28 @@ public sealed class ApplicationBackend : IApplicationBackend
             lines.Add($"Apresentação: n={d.SampleCount}, FPS={N(d.AverageFps)}, p99={N(d.P99FrameTimeMilliseconds)} ms; descartados={stream.DroppedFrameCount}; estado de apresentação desconhecido={stream.UnknownDisplayStateCount}");
             lines.AddRange(stream.Limitations); lines.AddRange(s.Limitations); lines.AddRange(d.Limitations);
         }
-        var series = result.Streams.Select(stream => new RelativeSeries(
+        var series = result.Streams.Take(16).Select(stream => new RelativeSeries(
             $"{stream.Identity.Application} PID {stream.Identity.ProcessId} / {stream.Identity.SwapChainAddress} / segmento {stream.Identity.Segment}",
             "ms", stream.Frames.TakeLast(10_000).Select(f => new RelativePoint(f.TimestampMilliseconds, f.FrameTimeMilliseconds)).ToArray(),
             stream.TimestampBasis, stream.DurationSource + "; frames de aplicação, incluindo descartados quando marcados pelo CSV; últimas 10.000 amostras para visualização")).ToArray();
-        return new("Análise de captura PresentMon", lines, Series: series);
+        var metrics = result.Streams.SelectMany(stream => stream.Frames.TakeLast(10_000).Where(f => FrameInterpretation.UtcTimestamp(stream, f).HasValue)
+            .Select(f => new MetricSample($"frames.{stream.Identity.ProcessId}.{stream.Identity.SwapChainAddress}.{stream.Identity.Segment}.frametime.ms", "Jogos", f.FrameTimeMilliseconds,
+                "ms", "PresentMon CSV", stream.DurationSource, FrameInterpretation.UtcTimestamp(stream, f)!.Value, TimeSpan.Zero,
+                f.FrameTimeMilliseconds.HasValue ? Availability.Available : Availability.InsufficientData, Limitation: stream.TimestampBasis))).Take(30_000).ToArray();
+        var indicators = result.Streams.Take(16).SelectMany(stream =>
+        {
+            var s = stream.ApplicationStatistics;
+            var id = $"{stream.Identity.Application}.{stream.Identity.ProcessId}.{stream.Identity.SwapChainAddress}.{stream.Identity.Segment}";
+            return new ResultIndicator[] {
+                new("frames." + id + ".fps", "FPS médio · " + stream.Identity.Application, s.AverageFps, "FPS", "Derivado: 1000 / média dos frametimes válidos; aplicação"),
+                new("frames." + id + ".p99.ms", "Frametime p99", s.P99FrameTimeMilliseconds, "ms", $"PID {stream.Identity.ProcessId} · swapchain {stream.Identity.SwapChainAddress} · segmento {stream.Identity.Segment}"),
+                new("frames." + id + ".low1.fps", "1% low", s.OnePercentLowFps, "FPS", "1000 / média dos 1% intervalos mais lentos; não é percentil de FPS") };
+        }).ToArray();
+        return new("Análise de captura PresentMon", lines, metrics, series, indicators, FrameInterpretation.Analyze(result),
+            result.Warnings.Concat(["Streams permanecem separadas. Até 16 streams aparecem nos indicadores e gráficos; o texto inclui todas. Até 30.000 intervalos UTC participam da correlação; o JSON bruto preserva a captura retida completa.",
+                metrics.Length > 0 ? "UTC veio da coluna de data/hora com offset explicitamente informado." : "Sem âncora UTC conhecida: correlação temporal indisponível; o horário da importação não será usado como horário dos frames."]).ToArray(),
+            result.Streams.Any(s => s.ApplicationStatistics.SampleCount > 0) ? Availability.Available : Availability.InsufficientData,
+            ComparisonKey: "frames:" + string.Join("|", result.Streams.Select(s => s.Identity.Application + ":" + s.DurationSource + ":" + s.Identity.FrameType).Distinct().Order()));
     }
     public async Task<TechnicalResult> CaptureDpcAsync(CancellationToken ct)
     {
@@ -233,7 +270,15 @@ public sealed class ApplicationBackend : IApplicationBackend
             "dpc.cpu." + e.Cpu + "." + e.Kind.ToLowerInvariant() + ".duration.us", "DPC/ISR", e.DurationMicroseconds,
             "µs", "Kernel ETW / TraceEvent", "ElapsedTimeMSec × 1000; instante final do evento",
             e.EndedAtUtc!.Value, TimeSpan.Zero, Limitation: "Evento individual; não representa input lag. " + result.TimelineTimeBasis)).ToArray();
-        return new("DPC/ISR — captura real", lines, metrics);
+        var series = (result.Timeline ?? []).Where(e => e.TraceRelativeMilliseconds.HasValue).GroupBy(e => e.Kind)
+            .Select(group => new RelativeSeries(group.Key + " · duração por evento", "µs",
+                group.TakeLast(10_000).Select(e => new RelativePoint(e.TraceRelativeMilliseconds!.Value, e.DurationMicroseconds)).ToArray(),
+                result.TimelineTimeBasis, "Kernel ETW / TraceEvent; ordem temporal original, eventos individuais")).ToArray();
+        return new("DPC/ISR — captura real", lines, metrics, series,
+            [new("dpc.events", "Eventos processados", result.EventsSeen, "eventos", "Inclui eventos auxiliares de imagem; não é contagem exclusiva de DPC"),
+             new("dpc.lost.events", "Eventos perdidos", result.EventsLost, "eventos", "Perdas tornam a cobertura parcial"),
+             new("dpc.maximum.us", "Maior duração retida", result.CpuSummaries.Count > 0 ? result.CpuSummaries.Max(s => s.MaximumMicroseconds) : null, "µs", "Não representa input lag físico")],
+            LatencyInterpretation.Analyze(result), result.Limitations, result.Status, result.Cancelled, ComparisonKey: "kernel-etw:dpc-isr");
     }
 
     public async Task<TechnicalResult> RunLabAsync(string test, string? path, IProgress<double> progress, CancellationToken ct)
@@ -247,7 +292,12 @@ public sealed class ApplicationBackend : IApplicationBackend
             _ => throw new ArgumentException("Teste não implementado. GPU/stress/gravação não são iniciados.")
         };
         await SaveArtifactAsync("lab", result, ct);
-        return new("Test Lab — " + result.Name, new[] { $"Duração={result.Duration.TotalSeconds:F3} s; operações={result.Operations}; bytes={result.Bytes}; taxa={N(result.ThroughputMiBPerSecond)} MiB/s" }.Concat(result.Limitations).ToArray());
+        return new("Teste concluído — " + result.Name, new[] { $"Duração={result.Duration.TotalSeconds:F3} s; operações={result.Operations}; bytes={result.Bytes}; taxa={N(result.ThroughputMiBPerSecond)} MiB/s" }.Concat(result.Limitations).ToArray(),
+            Indicators: [new("lab.duration.seconds", "Duração medida", result.Duration.TotalSeconds, "s", "Tempo real da carga; preparação não incluída"),
+                new("lab.operations", "Operações concluídas", result.Operations, "operações", result.Name),
+                new("lab.bytes", "Bytes processados", test == "cpu" ? null : result.Bytes, "bytes", "Somente a carga de memória/leitura usa este contador"),
+                new("lab.throughput", "Taxa derivada", result.ThroughputMiBPerSecond, "MiB/s", "Bytes / duração; inclui influência de CPU e cache")], Limitations: result.Limitations,
+            ComparisonKey: "lab:" + test + ":" + (path is null ? "fixed-workload" : Path.GetFullPath(path) + ":" + result.Bytes));
     }
     private NetworkPropertyOperation NetworkOperation(NetworkSettingView setting) =>
         new(_network, Guid.Parse(setting.AdapterId), setting.Keyword);

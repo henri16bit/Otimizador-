@@ -6,6 +6,7 @@
         <BooleanToVisibilityConverter x:Key="BooleanVisibility"/>
         <vm:AvailabilityConverter x:Key="AvailabilityLabel"/>
         <vm:ChangeLabelConverter x:Key="ChangeLabel"/>
+        <vm:DiagnosticLabelConverter x:Key="DiagnosticLabel"/>
         <SolidColorBrush x:Key="Background" Color="#0C121D"/>
         <SolidColorBrush x:Key="Surface" Color="#151E2D"/>
         <SolidColorBrush x:Key="SurfaceHigh" Color="#1D2A3D"/>

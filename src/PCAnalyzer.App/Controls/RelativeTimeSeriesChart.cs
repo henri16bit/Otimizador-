@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using PCAnalyzer.App.Services;
+using PCAnalyzer.Core;
 
 namespace PCAnalyzer.App.Controls;
 
