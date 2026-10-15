@@ -97,12 +97,14 @@ public sealed partial class MainViewModel
     public string ExecutionStage => _displayedExecution?.Progress.Stage ?? "Selecione o diagnóstico abaixo para começar.";
     public string ExecutionDetail => _displayedExecution?.Progress.Detail ?? "";
     public string ExecutionStarted => _displayedExecution?.StartedAt.LocalDateTime.ToString("HH:mm:ss") ?? "—";
-    public string ExecutionElapsed => _displayedExecution is { } run ? $"{Math.Max(0, ((run.EndedAt ?? DateTimeOffset.UtcNow) - run.StartedAt).TotalSeconds):0} s" : "—";
+    public string ExecutionElapsed => _displayedExecution is { } run ? run.EndedAt is null && !run.IsActive ? "Desconhecido"
+        : $"{Math.Max(0, ((run.EndedAt ?? DateTimeOffset.UtcNow) - run.StartedAt).TotalSeconds):0} s" : "—";
     public bool ProgressIndeterminate => _displayedExecution?.Progress.Fraction is null;
     public double ExecutionPercent => (_displayedExecution?.Progress.Fraction ?? 0) * 100;
     public string ExecutionOutcome => _displayedExecution?.Error ?? _displayedExecution?.Result?.Title ?? "O resultado aparecerá aqui.";
     public string PersistenceWarning => _displayedExecution?.PersistenceError ?? "";
-    public string OpenedResultContext => _openedTest is { } run ? $"{run.StartedAt.LocalDateTime:g} · {TestLabels.Status(run.Status)} · {(run.EndedAt - run.StartedAt)?.TotalSeconds:0.#} s" : "Resultado da operação selecionada";
+    public string OpenedResultContext => _openedTest is { } run ? $"{run.StartedAt.LocalDateTime:g} · {TestLabels.Status(run.Status)} · " +
+        (run.EndedAt is { } end ? $"{(end - run.StartedAt).TotalSeconds:0.#} s" : "Duração final desconhecida") : "Resultado da operação selecionada";
     public bool CanExportTest => _openedTest is not null;
     public TestRunRow? SelectedRun { get => _selectedRun; set { Set(ref _selectedRun, value); OpenTestCommand?.Refresh(); } }
     public TestRunRow? BeforeRun { get => _beforeRun; set { Set(ref _beforeRun, value); CompareTestsCommand?.Refresh(); } }

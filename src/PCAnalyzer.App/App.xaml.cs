@@ -8,6 +8,8 @@ namespace PCAnalyzer.App;
 
 public partial class App : Application
 {
+    // Only the separate friend test assembly supplies its own window/backend.
+    internal bool StartupManagedByTest { get; init; }
     private Mutex? _instanceLock;
     private readonly StartupDiagnostics _startup = new(Environment.GetCommandLineArgs().Skip(1).ToArray());
 
@@ -25,6 +27,7 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        if (StartupManagedByTest) { base.OnStartup(e); return; }
         try
         {
             base.OnStartup(e);

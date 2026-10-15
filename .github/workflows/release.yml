@@ -9,7 +9,7 @@ name: Publish Windows release
       tag:
         description: Existing version tag to publish
         required: true
-        default: v0.3.0-preview.1
+        default: v0.3.0-preview.2
 
 permissions:
   contents: read

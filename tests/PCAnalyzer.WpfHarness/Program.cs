@@ -18,7 +18,8 @@ internal static class Program
     [STAThread]
     public static int Main()
     {
-        var application = new FixtureApplication(); application.InitializeComponent(); application.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        var application = new PCAnalyzer.App.App { StartupManagedByTest = true };
+        application.InitializeComponent(); application.ShutdownMode = ShutdownMode.OnExplicitShutdown;
         var backend = new ScenarioBackend(); var vm = new MainViewModel(backend);
         var window = new MainWindow(vm, initializeHardware: false); application.MainWindow = window;
         window.Show();
@@ -29,7 +30,7 @@ internal static class Program
                 await RunAsync(window, vm, backend);
                 Directory.CreateDirectory("artifacts");
                 await File.WriteAllTextAsync("artifacts/ui-flow-result.json", JsonSerializer.Serialize(new { success = true,
-                    checks = new[] { "dashboard progress", "navigation during run", "no forced navigation", "cancel", "failure", "reopen stored result", "network read and unavailable property", "missing sensors" },
+                    checks = new[] { "interrupted execution recovery", "dashboard progress", "navigation during run", "no forced navigation", "cancel", "failure", "reopen stored result", "network read and unavailable property", "missing sensors" },
                     fixtureDataOnly = true, hardwareOrConfigurationChanged = false }));
                 _exitCode = 0;
             }
@@ -41,7 +42,11 @@ internal static class Program
     }
     private static async Task RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend)
     {
+        await backend.SaveTestAsync(new(Guid.NewGuid(), "ping", "Interrupted fixture", TestStatus.Running,
+            DateTimeOffset.UtcNow.AddDays(-1), null, new("Fixture interrupted")));
         await vm.InitializeAsync();
+        Require(vm.ExecutionState == "Falhou" && vm.ExecutionElapsed == "Desconhecido" && !vm.TestIsActive,
+            "Interrupted execution must not display an invented duration or restart.");
         Require(vm.OverviewCards.All(c => c.Value == "—"), "Unavailable sensors must not become zero.");
         vm.SelectedTest = TestCatalog.Get("ping");
         vm.StartSelectedTestCommand.Execute(null);
@@ -91,12 +96,6 @@ internal static class Program
     {
         for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
         { var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i); if (child is T match) yield return match; foreach (var nested in Descendants<T>(child)) yield return nested; }
-    }
-    private sealed class FixtureApplication : PCAnalyzer.App.App
-    {
-        // Application posts OnStartup to the dispatcher even when the harness uses Dispatcher.Run.
-        // Deliberately skip the production startup so this test never discovers real hardware.
-        protected override void OnStartup(StartupEventArgs e) { }
     }
 }
 
