@@ -25,6 +25,46 @@ public static class ReportPrivacy
         return text => ScrubText(known?.Replace(text, Redacted) ?? text);
     }
 
+    public static DiagnosticReport Anonymize(DiagnosticReport report, DiagnosticSession context)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        ArgumentNullException.ThrowIfNull(context);
+        return RedactReport(report, CreateTextRedactor(context));
+    }
+
+    internal static DiagnosticReport RedactReport(DiagnosticReport report, Func<string, string> clean) => report with
+    {
+        Summary = clean(report.Summary),
+        Components = report.Components.Select(component => component with
+        {
+            Id = clean(component.Id), Name = clean(component.Name), Summary = clean(component.Summary),
+            Evidence = component.Evidence.Select(e => CleanEvidence(e, clean)).ToArray(),
+            Limitations = component.Limitations.Select(clean).ToArray(), NextAction = CleanAction(component.NextAction, clean)
+        }).ToArray(),
+        Findings = report.Findings.Select(f => CleanFinding(f, clean)).ToArray(),
+        Recommendations = report.Recommendations.Select(a => CleanAction(a, clean)).ToArray(),
+        Limitations = report.Limitations.Select(clean).ToArray(),
+        Stages = report.Stages.Select(stage => stage with { Id = clean(stage.Id), Name = clean(stage.Name), Detail = clean(stage.Detail) }).ToArray()
+    };
+
+    private static SuggestedNextAction CleanAction(SuggestedNextAction action, Func<string, string> clean) => action with
+    { Id = clean(action.Id), Label = clean(action.Label), Target = clean(action.Target), Reason = clean(action.Reason) };
+
+    private static Evidence CleanEvidence(Evidence evidence, Func<string, string> clean) => evidence with
+    {
+        Description = clean(evidence.Description), Source = clean(evidence.Source),
+        MetricKey = evidence.MetricKey is null ? null : clean(evidence.MetricKey), Unit = evidence.Unit is null ? null : clean(evidence.Unit)
+    };
+
+    private static Finding CleanFinding(Finding finding, Func<string, string> clean) => finding with
+    {
+        Id = clean(finding.Id), Component = clean(finding.Component), Title = clean(finding.Title),
+        Explanation = clean(finding.Explanation), Recommendation = clean(finding.Recommendation),
+        Verification = clean(finding.Verification), Reversal = clean(finding.Reversal), Context = clean(finding.Context),
+        ExpectedImpact = clean(finding.ExpectedImpact), Requirements = clean(finding.Requirements),
+        Evidence = finding.Evidence.Select(e => CleanEvidence(e, clean)).ToArray()
+    };
+
     public static DiagnosticSession Anonymize(DiagnosticSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -88,18 +128,10 @@ public static class ReportPrivacy
                 Key = Clean(sample.Key), Component = Clean(sample.Component), Unit = Clean(sample.Unit),
                 Source = Clean(sample.Source), Method = Clean(sample.Method), Limitation = CleanNullable(sample.Limitation)
             }).ToArray(),
-            Findings = session.Findings.Select(finding => finding with
+            Findings = session.Findings.Select(finding => CleanFinding(finding, Clean)).ToArray(),
+            Processes = session.Processes?.Select(process => process with
             {
-                Id = Clean(finding.Id), Component = Clean(finding.Component), Title = Clean(finding.Title),
-                Explanation = Clean(finding.Explanation), Recommendation = Clean(finding.Recommendation),
-                Verification = Clean(finding.Verification), Reversal = Clean(finding.Reversal),
-                Context = Clean(finding.Context), ExpectedImpact = Clean(finding.ExpectedImpact),
-                Requirements = Clean(finding.Requirements),
-                Evidence = finding.Evidence.Select(evidence => evidence with
-                {
-                    Description = Clean(evidence.Description), Source = Clean(evidence.Source),
-                    MetricKey = CleanNullable(evidence.MetricKey), Unit = CleanNullable(evidence.Unit)
-                }).ToArray()
+                ProcessId = 0, Name = Clean(process.Name), Limitation = CleanNullable(process.Limitation)
             }).ToArray(),
             Changes = session.Changes?.Select(change => change with
             {

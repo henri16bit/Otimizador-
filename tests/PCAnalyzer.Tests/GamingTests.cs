@@ -197,6 +197,165 @@ public sealed class GamingTests
         await Assert.ThrowsAsync<PresentMonFormatException>(() => Parse("Application,ProcessID,SwapChainAddress,QPCTime,msBetweenPresents\ngame.exe,1,0x1,30000,16"));
     }
 
+    [Fact]
+    public void LegacyCaptureHistoryDoesNotInventSignatureVerificationOrCancellation()
+    {
+        const string legacyJson = """
+            {"Status":0,"Detail":"Legacy capture","OutputCsvPath":"capture.csv",
+             "Tool":{"ExecutablePath":"PresentMon.exe","Status":0,"Version":"2.0.0","CliStyle":1,
+                     "Detail":"Legacy inspection","SupportedOptions":[]},
+             "Import":{"Streams":[],"RecordsRead":0,"InvalidRecords":0,"FilteredRecords":0,"Complete":true,"Warnings":[]},
+             "ExitCode":0,"ProcessOutput":""}
+            """;
+        var result = System.Text.Json.JsonSerializer.Deserialize<PresentMonCaptureResult>(legacyJson)!;
+        Assert.False(result.Cancelled);
+        Assert.False(result.Import!.Cancelled);
+        Assert.Null(result.Import.ErrorDetail);
+        Assert.Equal(PresentMonSignatureStatus.NotChecked, result.Tool!.SignatureStatus);
+        Assert.Null(result.Tool.Publisher);
+    }
+
+    [Fact]
+    public async Task TruncatedTrailingRecordPreservesEarlierFramesAndMarksReadFailure()
+    {
+        var result = await Parse("Application,ProcessID,SwapChainAddress,CPUStartTime,FrameTime\ngame.exe,1,0x1,0,16\n\"unfinished");
+        Assert.False(result.Complete);
+        Assert.False(result.Cancelled);
+        Assert.NotNull(result.ErrorDetail);
+        Assert.Equal(16, Assert.Single(Assert.Single(result.Streams).Frames).FrameTimeMilliseconds);
+        Assert.Contains(result.Warnings, warning => warning.Contains("preservados"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CancellationAndIoFailurePreserveFramesAlreadyRead(bool cancellation)
+    {
+        using var cts = new CancellationTokenSource();
+        using var reader = new InterruptingReader(cts, cancellation);
+        var result = await new PresentMonCsvParser().ParseAsync(reader, cancellationToken: cts.Token);
+        Assert.False(result.Complete);
+        Assert.Equal(cancellation, result.Cancelled);
+        Assert.Equal(cancellation, result.ErrorDetail is null);
+        Assert.Equal(1, result.RecordsRead);
+        Assert.Single(Assert.Single(result.Streams).Frames);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RecoveringCancelledOrFailedCapturePreservesCsvAndNeverReportsCompletion(bool cancelled)
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".csv");
+        const string csv = "Application,ProcessID,SwapChainAddress,CPUStartTime,FrameTime\ngame.exe,42,0x1,0,16\n\"unfinished";
+        await File.WriteAllTextAsync(path, csv);
+        try
+        {
+            var request = new PresentMonCaptureRequest("not-executed.exe", 42, TimeSpan.FromSeconds(1), path);
+            var result = cancelled
+                ? await PresentMonPartialCapture.ReadCancelledAsync(request, null, "Fixture cancellation")
+                : await PresentMonPartialCapture.ReadFailureAsync(request, null, "Fixture failure", exitCode: 7, processOutput: "failure");
+            Assert.Equal(cancelled, result.Cancelled);
+            Assert.Equal(Availability.ReadError, result.Status);
+            Assert.NotNull(result.Import);
+            Assert.False(result.Import.Complete);
+            Assert.Single(Assert.Single(result.Import.Streams).Frames);
+            Assert.Equal(csv, await File.ReadAllTextAsync(path));
+            if (!cancelled) { Assert.Equal(7, result.ExitCode); Assert.Equal("failure", result.ProcessOutput); }
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task CancelledCaptureWithReadableFramesKeepsDataButMarksBothCaptureAndImportPartial()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".csv");
+        const string csv = "Application,ProcessID,SwapChainAddress,CPUStartTime,FrameTime\ngame.exe,42,0x1,0,16\ngame.exe,42,0x1,16,17\n";
+        await File.WriteAllTextAsync(path, csv);
+        try
+        {
+            var result = await PresentMonPartialCapture.ReadCancelledAsync(new("unused.exe", 42, TimeSpan.FromSeconds(1), path), null, "Cancelled");
+            Assert.Equal(Availability.Available, result.Status); // Availability describes retained measurements, not completion.
+            Assert.True(result.Cancelled);
+            Assert.True(result.Import!.Cancelled);
+            Assert.False(result.Import.Complete);
+            Assert.Null(result.Import.ErrorDetail);
+            var stream = Assert.Single(result.Import.Streams);
+            Assert.Equal(2, stream.ApplicationStatistics.SampleCount);
+            Assert.Contains(stream.Limitations, limitation => limitation.Contains("Captura cancelada"));
+            Assert.Equal(csv, await File.ReadAllTextAsync(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task CancelledCaptureWithoutCsvDoesNotInventEmptySuccessfulData()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".csv");
+        var result = await PresentMonPartialCapture.ReadCancelledAsync(new("unused.exe", 1, TimeSpan.FromSeconds(1), path), null, "Cancelled");
+        Assert.True(result.Cancelled);
+        Assert.Equal(Availability.InsufficientData, result.Status);
+        Assert.Null(result.Import);
+        Assert.False(File.Exists(path));
+    }
+
+    [Theory]
+    [InlineData("Intel Corporation", true)]
+    [InlineData("Intel(R) Corporation", true)]
+    [InlineData("Microsoft Corporation", true)]
+    [InlineData("Intel Corporation Fake", false)]
+    [InlineData("Fake Microsoft Corporation", false)]
+    [InlineData(null, false)]
+    public void PublisherNamesRequireExactRecognizedIdentity(string? publisher, bool expected) =>
+        Assert.Equal(expected, PresentMonSignatureVerifier.IsExpectedPublisher(publisher));
+
+    [Fact]
+    public void AuthenticodeStructuresMatchWindowsNativeAbi()
+    {
+        var type = typeof(PresentMonSignatureVerifier);
+        var flags = System.Reflection.BindingFlags.NonPublic;
+        var file = type.GetNestedType("TrustFile", flags)!;
+        var data = type.GetNestedType("TrustData", flags)!;
+        Assert.Equal(IntPtr.Size == 8 ? 32 : 16, System.Runtime.InteropServices.Marshal.SizeOf(file));
+        Assert.Equal(IntPtr.Size == 8 ? 88 : 52, System.Runtime.InteropServices.Marshal.SizeOf(data));
+        Assert.Equal(IntPtr.Size == 8 ? 40 : 24, System.Runtime.InteropServices.Marshal.OffsetOf(data, "FileInfo").ToInt32());
+        Assert.Equal(IntPtr.Size == 8 ? 80 : 48, System.Runtime.InteropServices.Marshal.OffsetOf(data, "SignatureSettings").ToInt32());
+    }
+
+    [Fact]
+    public async Task UnsignedProgramIsRejectedBeforeItsHelpCanRunOnWindows()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        // The test assembly has no Authenticode signature. Its filename does not grant execution trust.
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".exe");
+        File.Copy(typeof(GamingTests).Assembly.Location, path);
+        try
+        {
+            var result = await new PresentMonCaptureService().InspectAsync(path);
+            Assert.Equal(Availability.Unsupported, result.Status);
+            Assert.Equal(PresentMonSignatureStatus.Unsigned, result.SignatureStatus);
+            Assert.Empty(result.SupportedOptions);
+        }
+        finally { File.Delete(path); }
+    }
+
+    private sealed class InterruptingReader(CancellationTokenSource cts, bool cancel) : TextReader
+    {
+        private bool first = true;
+        public override ValueTask<int> ReadAsync(Memory<char> buffer, CancellationToken cancellationToken = default)
+        {
+            if (first)
+            {
+                first = false;
+                const string chunk = "Application,ProcessID,SwapChainAddress,CPUStartTime,FrameTime\ngame.exe,1,0x1,0,16\n";
+                chunk.AsMemory().CopyTo(buffer);
+                return ValueTask.FromResult(chunk.Length);
+            }
+            if (cancel) { cts.Cancel(); cancellationToken.ThrowIfCancellationRequested(); }
+            throw new IOException("Fixture interrupted read");
+        }
+    }
+
     private sealed class InfiniteRecordReader : TextReader
     {
         private const string Prefix = "Application,ProcessID,SwapChainAddress,CPUStartTime,FrameTime\n";

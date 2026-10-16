@@ -36,7 +36,8 @@ public sealed record ProcessRow(ProcessSample Sample)
     public string Memory => Sample.WorkingSetBytes is { } v ? $"{v / 1048576d:0.0} MiB" : "—";
     public string? Limitation => Sample.Limitation;
 }
-public sealed record CollectionPreferences(string Mode, double IntervalSeconds, bool OnboardingDismissed = false);
+public sealed record CollectionPreferences(string Mode, double IntervalSeconds, bool OnboardingDismissed = false,
+    string InterfaceMode = "Simples", string PresentMonPath = "");
 
 public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 {
@@ -52,6 +53,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private CancellationTokenSource? _operation;
     private Task? _collectorTask;
     private Task? _initializationTask;
+    private Task? _inventoryTask;
     private TaskCompletionSource? _operationFinished;
     private TelemetryBatch? _pendingBatch;
     private HardwareInventory? _inventory;
@@ -60,7 +62,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _lastAnalysis = DateTimeOffset.MinValue;
     private int _droppedSamples;
-    private bool _closing, _isBusy;
+    private bool _closing, _isBusy, _recoveringHistory;
     private volatile bool _minimized, _paused, _diagnosticCadence;
     private string _status = "Identificando o hardware do seu PC…";
     private string _operationText = "Escolha um teste em Investigar. Seu resultado aparecerá aqui quando terminar.";
@@ -90,14 +92,16 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _backend = backend;
         _execution = new TestExecutionService(backend, backend.LogError);
         _execution.Changed += OnExecutionChanged;
-        Sections = [new("dashboard", "Visão geral", "\uE80F", 0, "Acompanhe seu PC e escolha o que investigar."),
+        Sections = [new("dashboard", "Painel", "\uE80F", 0, "Analise seu PC e veja o próximo passo."),
             new("componentes", "Componentes", "\uE950", 1, "Escolha um componente para ver suas leituras e seu histórico."),
             new("processos", "Processos", "\uE9D9", 2, "Encontre os aplicativos que estão usando CPU e memória."),
             new("investigar", "Investigar", "\uE721", 3, "Escolha um teste de acordo com o problema observado."),
             new("resultados", "Resultados", "\uE9D2", 4, "Consulte as observações e o resultado do último teste."),
             new("historico", "Histórico", "\uE81C", 5, "Salve, abra e compare sessões de diagnóstico."),
-            new("ajustes", "Ajustes", "\uE9E9", 6, "Revise uma alteração por vez e restaure quando necessário."),
-            new("config", "Configurações", "\uE713", 7, "Defina a frequência da coleta e consulte as informações do aplicativo.")];
+            new("ajustes", "Otimizações", "\uE9E9", 6, "Revise uma alteração por vez e restaure quando necessário."),
+            new("config", "Configurações", "\uE713", 7, "Consulte as fontes e ajuste a coleta."),
+            new("analisar", "Analisar", "\uE721", 8, "Observe o PC durante o problema e receba um relatório."),
+            new("avancado", "Avançado", "\uE950", 9, "Ferramentas para investigar uma medição específica.")];
         ComponentChoices = [new("cpu", "Processador (CPU)", "CPU"), new("gpu", "Placa de vídeo (GPU)", "GPU"),
             new("ram", "Memória (RAM)", "RAM"), new("nvme", "Discos e NVMe", "Disco"), new("rede", "Rede", "Rede"), new("todos", "Todos os componentes", null)];
         _section = Sections[0];
@@ -134,14 +138,15 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         DiskReadCommand = Command(() => LabAsync("disk-read"));
         SavePreferencesCommand = Command(SavePreferencesAsync);
         CancelCommand = new RelayCommand(() => { _execution.Cancel(); _operation?.Cancel(); }, () => IsBusy);
-        PauseCommand = new RelayCommand(() => { _paused = !_paused; Notify(nameof(PauseCaption)); Notify(nameof(CollectionStateLabel)); Status = _paused ? "Coleta pausada pelo usuário." : "Coleta passiva retomada."; }, () => _inventory is not null && _loadedSession is null);
-        LiveCommand = new RelayCommand(() => { _loadedSession = null; Replace(Capabilities, _inventory?.Capabilities ?? []); NotifyViewState(); RefreshDisplay(); AnalyzeDisplay(); Status = "Visualização ao vivo. As leituras seguem o perfil de coleta selecionado."; }, () => _loadedSession is not null);
+        PauseCommand = new RelayCommand(() => { _paused = !_paused; Notify(nameof(PauseCaption)); RefreshTelemetryHealth(); Status = _paused ? "Coleta pausada pelo usuário." : "Coleta passiva retomada."; }, () => _inventory is not null && _loadedSession is null);
+        LiveCommand = new RelayCommand(() => { _loadedSession = null; Processes.Clear(); RefreshVisibleProcesses(); Replace(Capabilities, _inventory?.Capabilities ?? []); NotifyViewState(); RefreshDisplay(); AnalyzeDisplay(); RefreshTelemetryHealth(); Status = "Leituras atuais. Aguarde a próxima atualização da coleta."; }, () => _loadedSession is not null);
         NewSessionCommand = Command(NewSessionAsync, () => !IsHistoryView);
         _uiTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => FlushUi(), Dispatcher.CurrentDispatcher);
         _uiTimer.Stop();
         Replace(OverviewCards, MetricPresentation.Overview([], null));
         InitializeDiagnosticCommands();
         InitializeNetworkCommands();
+        InitializeAnalysisCommands();
     }
 
     public IReadOnlyList<Section> Sections { get; }
@@ -167,12 +172,18 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public string PageDescription => SelectedSection?.Description ?? "";
     public bool IsHistoryView => _loadedSession is not null;
     public bool IsLiveView => _loadedSession is null;
-    public string CollectionStateLabel => IsHistoryView ? "Sessão salva" : _inventory is null ? "Detectando hardware" : _paused ? "Coleta pausada" : "Ao vivo";
+    public string CollectionStateLabel => IsHistoryView ? "Sessão salva" : _paused && !_coordinatedCollection ? "Coleta pausada" :
+        TelemetryHealthRows.Any(h => h.Health.State == TelemetrySourceState.Healthy) ? "Leituras recentes" :
+        TelemetryHealthRows.Any(h => h.Health.State is TelemetrySourceState.Error or TelemetrySourceState.Stale) ? "Coleta sem atualização" : "Aguardando leituras";
     public string MachineSummary => (_loadedSession?.Inventory ?? _inventory)?.Components.FirstOrDefault(c => c.Category == "CPU")?.Name ?? "Identificando os componentes do seu PC…";
     public string ProcessFilter { get => _processFilter; set { if (Set(ref _processFilter, value)) RefreshVisibleProcesses(); } }
     public ObservableCollection<ProcessRow> VisibleProcesses { get; } = [];
-    private void RefreshVisibleProcesses() => Replace(VisibleProcesses, Processes.Where(p => string.IsNullOrWhiteSpace(ProcessFilter)
-        || p.Name.Contains(ProcessFilter, StringComparison.OrdinalIgnoreCase) || p.Id.ToString(CultureInfo.InvariantCulture).Contains(ProcessFilter)));
+    private void RefreshVisibleProcesses()
+    {
+        Replace(VisibleProcesses, Processes.Where(p => string.IsNullOrWhiteSpace(ProcessFilter)
+            || p.Name.Contains(ProcessFilter, StringComparison.OrdinalIgnoreCase) || p.Id.ToString(CultureInfo.InvariantCulture).Contains(ProcessFilter)));
+        Notify(nameof(ProcessEmptyMessage));
+    }
     public string FindingsSummary => Findings.Any(f => f.Category is FindingCategory.ObservedProblem or FindingCategory.PossibleProblem)
         ? "Há observações para investigar" : Findings.Any(f => f.Category == FindingCategory.NoAnomaly)
         ? "A triagem não indicou uma alteração" : "Aguardando contexto para a análise";
@@ -187,12 +198,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     };
     public string SelectedFindingConfidence => SelectedFinding?.Confidence switch { Confidence.High => "Alta", Confidence.Medium => "Média", Confidence.Low => "Baixa", _ => "—" };
     public string DataDirectory => _backend.DataDirectory;
-    public bool IsBusy { get => _isBusy; private set { Set(ref _isBusy, value); RefreshCommands(); CancelCommand.Refresh(); } }
+    public bool IsBusy { get => _isBusy; private set { Set(ref _isBusy, value); RefreshCommands(); CancelCommand.Refresh(); if (!value && SelectedSection?.Id is "investigar" or "ajustes") EnsureNetworkLoaded(); } }
     public bool IsMinimized { get => _minimized; set => _minimized = value; }
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string OperationText { get => _operationText; private set => Set(ref _operationText, value); }
     public string OperationTitle { get => _operationTitle; private set => Set(ref _operationTitle, value); }
-    public string ViewContext => _loadedSession is { } saved ? $"HISTÓRICO: {saved.Label} · {saved.StartedAt.LocalDateTime:g}" : $"AO VIVO · {_startedAt.LocalDateTime:g} · {_mode} · intervalo alvo {IntervalSeconds:0.##} s";
+    public string ViewContext => _loadedSession is { } saved ? $"HISTÓRICO: {saved.Label} · {saved.StartedAt.LocalDateTime:g}" : $"{CollectionStateLabel} · {_mode} · intervalo alvo {IntervalSeconds:0.##} s";
     public string BufferInfo { get { lock (_sampleLock) return $"{_samples.Count:N0} / {SessionSampleLimit:N0} amostras · {_droppedSamples:N0} descartadas · gráfico: últimas 600"; } }
     public string PauseCaption => _paused ? "Retomar coleta" : "Pausar coleta";
     public string Mode { get => _mode; set { if (Set(ref _mode, value)) { RecordCollectionChange($"Perfil alterado para {value}"); IntervalSeconds = value == "Avançado" ? 1 : 5; Notify(nameof(ViewContext)); } } }
@@ -207,7 +218,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public int ContentTab { get => _contentTab; private set => Set(ref _contentTab, value); }
     public int ResultTab { get => _resultTab; set => Set(ref _resultTab, value); }
     public int InvestigationTab { get => _investigationTab; set => Set(ref _investigationTab, value); }
-    public Section? SelectedSection { get => _section; set { if (value is not null && Set(ref _section, value)) { ContentTab = value.Tab; Notify(nameof(PageTitle)); Notify(nameof(PageDescription)); } } }
+    public Section? SelectedSection { get => _section; set { if (value is not null && Set(ref _section, value)) { ContentTab = value.Tab; Notify(nameof(PageTitle)); Notify(nameof(PageDescription)); Notify(nameof(MenuSelection)); Notify(nameof(HeaderIsAdvancedView)); if (value.Id is "investigar" or "ajustes") EnsureNetworkLoaded(); } } }
     public ComponentChoice? SelectedComponent { get => _component; set { if (Set(ref _component, value)) { MetricFilter = ""; RefreshDisplay(); Notify(nameof(IsStorageComponent)); } } }
     public MetricRow? SelectedMetric { get => _selectedMetric; set { if (Set(ref _selectedMetric, value)) RefreshChart(); } }
     public ProcessRow? SelectedProcess { get => _selectedProcess; set { if (Set(ref _selectedProcess, value)) ProcessIdText = value?.Id.ToString(CultureInfo.InvariantCulture) ?? ""; } }
@@ -264,7 +275,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void Navigate(string id)
     {
-        if (id is "fontes" or "observacoes") { ResultTab = id == "fontes" ? 2 : 0; id = "resultados"; }
+        if (id is "fontes" or "observacoes") { ShowTechnicalDetails = true; ResultTab = id == "fontes" ? 2 : 0; id = "resultados"; }
         SelectedSection = Sections.FirstOrDefault(s => s.Id == id) ?? Sections[0];
     }
     private void NotifyViewState()
@@ -274,7 +285,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         RefreshCommands();
     }
 
-    private AsyncCommand Command(Func<Task> action, Func<bool>? canExecute = null) => new(() => RunOperationAsync(action), () => !IsBusy && _inventory is not null && (canExecute?.Invoke() ?? true));
+    private AsyncCommand Command(Func<Task> action, Func<bool>? canExecute = null) => new(() => RunOperationAsync(action), () => !IsBusy && !_recoveringHistory && _inventory is not null && (canExecute?.Invoke() ?? true));
     private void RefreshCommands()
     {
         foreach (var property in GetType().GetProperties().Where(p => p.PropertyType == typeof(AsyncCommand)))
@@ -287,17 +298,52 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         try
         {
             await LoadPreferencesAsync();
-            _inventory = await _backend.InitializeAsync(_lifetime.Token);
-            _lifetime.Token.ThrowIfCancellationRequested();
-            Replace(Capabilities, _inventory.Capabilities);
-            RefreshDisplay(); AnalyzeDisplay();
-            Status = "Coleta ao vivo ativa. Escolha um componente ou um teste para investigar.";
+            _inventory = new(DateTimeOffset.UtcNow, [], [new("Inventário", Availability.Collecting, "Identificação em andamento. A coleta básica já pode iniciar.")]);
+            _collectionStartedAt = DateTimeOffset.UtcNow;
+            _recoveringHistory = true;
             NotifyViewState(); RefreshCommands(); _uiTimer.Start(); _collectorTask = Task.Run(CollectLoopAsync);
-            try { await RefreshHistoryAsync(); } catch (Exception ex) { RecordFailure("Ler histórico", ex); }
-            try { await _execution.RecoverInterruptedAsync(_lifetime.Token); await RefreshTestsAsync(); } catch (Exception ex) { RecordFailure("Ler testes salvos", ex); }
+            _inventoryTask = RefreshInventoryAsync();
+            await Task.WhenAll(_inventoryTask, LoadInitialHistoryAsync());
         }
         catch (OperationCanceledException) when (_closing) { }
         catch (Exception ex) { RecordFailure("Inicializar", ex); }
+    }
+
+    private async Task RefreshInventoryAsync()
+    {
+        try
+        {
+            var inventory = await Task.Run(() => _backend.InitializeAsync(_lifetime.Token), _lifetime.Token);
+            if (_closing) return;
+            _inventory = inventory;
+            if (!IsHistoryView) Replace(Capabilities, inventory.Capabilities);
+            RefreshDisplay(); AnalyzeDisplay(); RefreshTelemetryHealth(); NotifyViewState();
+            if (!IsBusy) Status = "Identificação concluída. Use Analisar meu PC para observar o uso atual.";
+        }
+        catch (OperationCanceledException) when (_closing) { }
+        catch (Exception ex)
+        {
+            _backend.LogError("Identificar hardware", ex);
+            if (_closing) return;
+            _inventory = new(DateTimeOffset.UtcNow, [], [new("Inventário", Availability.ReadError, ex.Message)]);
+            Replace(Capabilities, _inventory.Capabilities);
+            RefreshTelemetryHealth();
+            Status = "A identificação detalhada falhou. A coleta básica continua; use Tentar ler novamente.";
+        }
+    }
+    private async Task LoadInitialHistoryAsync()
+    {
+        try { await RefreshHistoryAsync(); }
+        catch (OperationCanceledException) when (_closing) { }
+        catch (Exception ex) { _backend.LogError("Ler histórico", ex); if (!_closing) Notification = "Histórico indisponível: " + ex.Message; }
+        try
+        {
+            await _execution.RecoverInterruptedAsync(_lifetime.Token);
+            if (!_closing) await RefreshTestsAsync();
+        }
+        catch (OperationCanceledException) when (_closing) { }
+        catch (Exception ex) { _backend.LogError("Ler testes salvos", ex); if (!_closing) Notification = "Não foi possível ler os testes salvos: " + ex.Message; }
+        finally { _recoveringHistory = false; RefreshCommands(); }
     }
 
     private async Task CollectLoopAsync()
@@ -305,17 +351,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         while (!_lifetime.IsCancellationRequested)
         {
             var cadence = TimeSpan.FromSeconds(_diagnosticCadence ? 1 : _minimized ? Math.Max(15, IntervalSeconds) : IntervalSeconds);
-            if (!_paused)
+            if (!_paused && !_coordinatedCollection)
             {
                 try
                 {
                     var batch = await _backend.CollectAsync(cadence, _lifetime.Token);
-                    lock (_sampleLock)
-                    {
-                        _samples.AddRange(batch.Metrics);
-                        TrimSamples();
-                        _pendingBatch = batch;
-                    }
+                    AcceptBatch(batch);
                 }
                 catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { break; }
                 catch (Exception ex)
@@ -338,9 +379,13 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (_closing || _minimized) return;
         RefreshExecutionDisplay();
+        RefreshTelemetryHealth();
         TelemetryBatch? batch;
         lock (_sampleLock) { batch = _pendingBatch; _pendingBatch = null; }
         if (batch is null) return;
+        if (_lastBatchAt is { } previousBatch && batch.Timestamp < previousBatch) return;
+        _lastBatchAt = batch.Timestamp;
+        _liveProcesses = batch.Processes;
         var nextKeys = batch.Metrics.Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
         foreach (var key in _liveKeys.Except(nextKeys)) _latest.Remove(key);
         _liveKeys = nextKeys;
@@ -355,6 +400,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             if (DateTimeOffset.UtcNow - _lastAnalysis > TimeSpan.FromSeconds(15)) AnalyzeDisplay();
         }
         Notify(nameof(BufferInfo));
+        RefreshTelemetryHealth();
         if (!_paused && !IsBusy) Status = $"Última coleta {batch.Timestamp.LocalDateTime:HH:mm:ss} · {batch.Metrics.Count} métricas · {batch.Processes.Count} processos";
     }
     private bool MatchesComponent(string component)
@@ -407,7 +453,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         MetricSample[] series;
         if (_loadedSession is { } saved) series = saved.Samples.Where(s => s.Key == selected).OrderBy(s => s.Timestamp).ToArray();
         else lock (_sampleLock) series = _samples.Where(s => s.Key == selected).OrderBy(s => s.Timestamp).ToArray();
-        var end = series.LastOrDefault()?.Timestamp ?? DateTimeOffset.UtcNow;
+        var end = IsHistoryView || _paused ? series.LastOrDefault()?.Timestamp ?? DateTimeOffset.UtcNow : DateTimeOffset.UtcNow;
         ChartSamples = series.Where(s => s.Timestamp >= end.AddMinutes(-ChartWindowMinutes)).TakeLast(600).ToArray();
         Notify(nameof(ChartContext));
     }
@@ -420,7 +466,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         else { MetricSample[] samples; lock (_sampleLock) samples = _samples.ToArray(); findings = _backend.Analyze(inventory, samples); }
         var previous = SelectedFinding?.Id;
         Replace(Findings, findings);
-        SelectedFinding = Findings.FirstOrDefault(f => f.Id == previous) ?? Findings.FirstOrDefault();
+        if (!_findingFromResult) SelectedFinding = Findings.FirstOrDefault(f => f.Id == previous) ?? Findings.FirstOrDefault();
         Notify(nameof(FindingsSummary)); Notify(nameof(OverviewFindings));
         _lastAnalysis = DateTimeOffset.UtcNow;
     }
@@ -432,7 +478,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         var note = Notes + (_droppedSamples > 0 ? $"\nBuffer limitado: {_droppedSamples} amostras antigas descartadas; este relatório contém somente a janela retida." : "")
             + (collectionChanges.Length > 0 ? "\nMudanças durante a sessão:\n" + string.Join("\n", collectionChanges) : "");
         return new(_sessionId, string.IsNullOrWhiteSpace(SessionLabel) ? "Diagnóstico local" : SessionLabel.Trim(), _startedAt, DateTimeOffset.UtcNow,
-            new(Workload, Mode, IntervalSeconds, note), _inventory, samples, _backend.Analyze(_inventory, samples));
+            new(Workload, Mode, IntervalSeconds, note), _inventory, samples, _backend.Analyze(_inventory, samples), Processes: Processes.Select(p => p.Sample).ToArray());
     }
     private void RecordCollectionChange(string detail)
     {
@@ -456,6 +502,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     }
     private void RecordFailure(string operation, Exception ex)
     {
+        ClearOpenedResult();
         _backend.LogError(operation, ex); Status = $"{operation}: {ex.Message}";
         OperationTitle = $"Falha · {operation}";
         Notification = Status;
@@ -479,10 +526,11 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (SelectedSession is null) return;
         _loadedSession = await _backend.LoadSessionAsync(SelectedSession.Id, OperationToken) ?? throw new InvalidOperationException("Sessão não encontrada.");
-        Processes.Clear();
+        Replace(Processes, (_loadedSession.Processes ?? []).Select(p => new ProcessRow(p)));
         RefreshVisibleProcesses();
         Replace(Capabilities, _loadedSession.Inventory.Capabilities);
-        NotifyViewState(); Navigate("dashboard"); RefreshDisplay(); AnalyzeDisplay();
+        _findingFromResult = false;
+        NotifyViewState(); Navigate("dashboard"); RefreshDisplay(); AnalyzeDisplay(); RefreshTelemetryHealth();
         Status = "Visualização de sessão salva. A coleta ao vivo segue em segundo plano; use Voltar ao vivo.";
     }
     private async Task CompareAsync()
@@ -501,19 +549,16 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     }
     private async Task ShowResultAsync(Task<TechnicalResult> task)
     {
+        ClearOpenedResult();
         var result = await task;
         OperationTitle = result.Title; OperationText = string.Join(Environment.NewLine, result.Lines);
         Replace(ResultSeries, result.Series ?? []);
         SelectedRelativeSeries = ResultSeries.FirstOrDefault();
         Notify(nameof(HasRelativeSeries));
         Notification = result.Title;
-        if (result.Metrics is { Count: > 0 } metrics)
-        {
-            if (_loadedSession is not null) { _loadedSession = null; Replace(Capabilities, _inventory?.Capabilities ?? []); NotifyViewState(); }
-            lock (_sampleLock) { _samples.AddRange(metrics); TrimSamples(); }
-            foreach (var metric in metrics) _latest[metric.Key] = metric;
-            RefreshDisplay(); AnalyzeDisplay(); Notify(nameof(BufferInfo));
-        }
+        RefreshSimpleReport(result);
+        Replace(ResultIndicators, (result.Indicators ?? []).Select(i => new IndicatorRow(i)));
+        Replace(TestFindings, result.Findings ?? []); Replace(ResultLimitations, result.Limitations ?? []);
         Status = result.Title;
     }
     private async Task ImportFramesAsync()
@@ -555,6 +600,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (SelectedPowerPlan is not { } plan) return;
         var preview = await _backend.PreviewPowerPlanAsync(plan.Id, OperationToken);
+        ClearOpenedResult();
         OperationTitle = "Pré-visualização · energia"; OperationText = preview;
         ResultTab = 1;
         if (!Confirm("Confirmar alteração do plano de energia", preview + "\n\nAplicar esta alteração e registrar os valores para restauração?")) return;
@@ -564,6 +610,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (SelectedNetworkSetting is not { } setting || SelectedNetworkValue is not { } value) return;
         var preview = await _backend.PreviewNetworkChangeAsync(setting, value.Id, OperationToken);
+        ClearOpenedResult();
         OperationTitle = "Pré-visualização · rede"; OperationText = preview;
         ResultTab = 1;
         if (!Confirm("Confirmar alteração de rede", preview + "\n\nO valor será gravado com -NoRestart. A ativação pode exigir um reinício posterior autorizado separadamente. Aplicar exatamente esta alteração?")) return;
@@ -577,6 +624,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     }
     private async Task ShowChangeAsync(ChangeRecord change)
     {
+        ClearOpenedResult();
         OperationTitle = $"Alteração: {ChangeLabelConverter.Label(change.State)}";
         ResultTab = 1;
         OperationText = $"{change.Kind} · {change.Target}\nAntes: {change.Before}\nDepois: {change.After}\nEstado verificado: {change.State}\n{change.Error}\n{change.RecoveryInstructions}";
@@ -617,13 +665,16 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             if (preferences is null) return;
             Mode = CollectionModes.Contains(preferences.Mode) ? preferences.Mode : "Leve"; IntervalSeconds = preferences.IntervalSeconds;
             ShowFirstUse = !preferences.OnboardingDismissed;
+            InterfaceMode = preferences.InterfaceMode;
+            PresentMonPath = preferences.PresentMonPath;
+            if (!string.IsNullOrWhiteSpace(PresentMonPath)) PresentMonStatus = "Ferramenta configurada. A assinatura e a compatibilidade serão verificadas antes de cada captura.";
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { _backend.LogError("Ler preferências", ex); }
     }
     private async Task SavePreferencesAsync()
     {
         Directory.CreateDirectory(DataDirectory);
-        await File.WriteAllTextAsync(PreferencesPath, JsonSerializer.Serialize(new CollectionPreferences(Mode, IntervalSeconds, !ShowFirstUse)), OperationToken);
+        await File.WriteAllTextAsync(PreferencesPath, JsonSerializer.Serialize(new CollectionPreferences(Mode, IntervalSeconds, !ShowFirstUse, InterfaceMode, PresentMonPath)), OperationToken);
         Status = "Intervalo e modo de coleta salvos localmente.";
     }
     public async ValueTask DisposeAsync()
@@ -631,7 +682,11 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         if (_closing) return;
         _closing = true; _uiTimer.Stop(); _lifetime.Cancel(); _operation?.Cancel();
         _execution.Cancel(); _execution.Changed -= OnExecutionChanged;
-        if (_initializationTask is not null) await _initializationTask;
+        if (_initializationTask is not null)
+        {
+            try { await _initializationTask.WaitAsync(TimeSpan.FromSeconds(2)); }
+            catch (TimeoutException) { _backend.LogError("Encerrar inventário", new TimeoutException("O provedor ainda está encerrando em segundo plano.")); }
+        }
         if (_operationFinished is { Task.IsCompleted: false }) await _operationFinished.Task;
         if (_collectorTask is not null) { try { await _collectorTask; } catch (OperationCanceledException) { } }
         try { if (_inventory is not null && _samples.Count > 0) await _backend.SaveSessionAsync(Snapshot(), CancellationToken.None); }

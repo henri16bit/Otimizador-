@@ -27,10 +27,20 @@ public sealed record LatencyEvent(string Kind, int Cpu, ulong RoutineAddress, st
 public sealed record LatencyTimeBucket(double StartMilliseconds, double EndMilliseconds, string Kind,
     long Count, double TotalMicroseconds, double MaximumMicroseconds);
 
+/// <summary>
+/// Source events are counted once. DPC includes ordinary, timer and threaded DPC callbacks;
+/// rejected events have invalid processor/duration and never enter aggregates. Unknown modules
+/// remain usable latency events. Lost events are reported separately by the ETW source.
+/// </summary>
+public sealed record EtwEventCounts(long TotalEtwEvents, long DpcEvents, long IsrEvents,
+    long AuxiliaryEvents, long RejectedLatencyEvents, long AnalyzedLatencyEvents,
+    long UnmappedLatencyEvents, long TimelineEventsRetained);
+
 public sealed record EtwCaptureResult(Availability Status, string Detail, DateTimeOffset StartedAt,
     TimeSpan Duration, string? SessionName, long EventsSeen, int EventsLost, bool Cancelled,
     bool LimitReached, IReadOnlyList<LatencySummary> CpuSummaries,
     IReadOnlyList<LatencySummary> ModuleSummaries, IReadOnlyList<string> Limitations,
     IReadOnlyList<LatencyEvent>? Timeline = null, bool TimelineTruncated = false,
     string TimelineTimeBasis = "ETW relative ms; UTC derived by TraceEvent from trace clock synchronization",
-    DateTimeOffset? TraceStartUtc = null, IReadOnlyList<LatencyTimeBucket>? TimeBuckets = null);
+    DateTimeOffset? TraceStartUtc = null, IReadOnlyList<LatencyTimeBucket>? TimeBuckets = null,
+    EtwEventCounts? EventCounts = null);

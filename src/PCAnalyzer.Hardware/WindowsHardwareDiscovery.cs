@@ -90,8 +90,17 @@ public sealed class WindowsHardwareDiscovery : IHardwareDiscovery
         }
         capabilities.Add(new("Sensores CPU / SMART NVMe", Availability.Unsupported,
             "Não há driver kernel próprio. Temperatura CPU, timings, SPD direto, SMART/desgaste NVMe exigem provedores adicionais; indisponíveis nesta implementação."));
-        capabilities.Add(new("Topologia CPU", Availability.Available,
-            "Núcleos e threads vêm de Win32_Processor; a coleta por lógico usa instâncias Processor Information, preservando grupo e índice na origem."));
+        var cpuCounts = components.Where(component => component.Category == "CPU").ToArray();
+        var topologyKnown = cpuCounts.Length > 0 && cpuCounts.All(component =>
+            new[] { "NumberOfCores", "NumberOfLogicalProcessors" }.All(name => component.Facts.Any(fact => fact.Name == name &&
+                fact.Status == Availability.Available && int.TryParse(fact.Value, out var count) && count > 0)));
+        capabilities.Add(new("Contagens CPU", topologyKnown ? Availability.Available : Availability.InsufficientData,
+            topologyKnown ? "Núcleos e processadores lógicos informados por Win32_Processor. Contagens não identificam a relação entre núcleos, SMT e grupos." :
+                "Win32_Processor não retornou contagens completas de núcleos/processadores lógicos; a topologia não será presumida."));
+        capabilities.Add(new("Topologia CPU detalhada", Availability.Unsupported,
+            "Instâncias Processor Information preservam grupo e índice na origem, quando acessíveis. O mapa de núcleos físicos/SMT, tipos híbridos e caches não foi coletado."));
+        capabilities.Add(new("Utilização GPU alternativa", Availability.Collecting,
+            "A coleta passiva consulta GPU Engine em segundo plano quando NVML não fornece utilização. Exige WDDM compatível; não comprova suporte antes da primeira leitura e não fornece temperatura ou VRAM."));
         return new(DateTimeOffset.UtcNow, components, capabilities);
 
         void Add(string id, string category, Dictionary<string, object?> row, params string[] names) =>

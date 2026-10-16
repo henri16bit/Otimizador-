@@ -10,7 +10,7 @@ dotnet run --project src/PCAnalyzer.Verify -- --output "$env:LOCALAPPDATA\PCAnal
 
 Ou inicie `PCAnalyzer.Verify.exe` publicado para Windows x64. Sem `--output`, usa `%LOCALAPPDATA%\PCAnalyzer\validation`; `--help` mostra uso. Cada execução cria `run-<id da sessão>`, preservando verificações anteriores. Ctrl+C cancela e libera o coletor.
 
-A ferramenta identifica o computador por WMI/Win32/NVML, imprime modelos, fontes e disponibilidades com identificadores pessoais omitidos, e coleta três lotes reais com espera de 2 s entre eles. O primeiro estabelece baselines; o segundo e terceiro exigem CPU total, RAM total/disponível, commit e limite de commit disponíveis e finitos. Confere limites físicos e presença dos metadados de origem. Todas as métricas coletadas, inclusive as indisponíveis e seus motivos, são persistidas.
+A ferramenta identifica o computador por WMI/Win32/NVML e coleta entre três e seis lotes reais com espera de 2 s. O primeiro estabelece deltas; os dois últimos exigem CPU total, RAM total/disponível, commit e limite de commit disponíveis e finitos. Confere também PID próprio, nome, working set positivo e CPU finita após aquecimento. Não exige acesso a processos protegidos de terceiros. O limite de seis lotes permite iniciar fontes opcionais sem esperar indefinidamente. Métricas ausentes e seus motivos também são persistidos.
 
 Quando NVIDIA é identificada, exige enumeração NVML e utilização/VRAM usada/VRAM total em cada GPU NVML nas duas últimas amostras. Não presume que um índice WMI identifica o mesmo índice NVML. Se NVML estiver ausente ou não oferecer sensores essenciais, retorna verificação incompleta. Em máquinas sem NVIDIA identificada, informa explicitamente que telemetria GPU não foi validada nesta execução.
 

@@ -4,7 +4,7 @@ using PCAnalyzer.Core;
 namespace PCAnalyzer.Hardware;
 
 /// <summary>Loads the NVIDIA user-mode DLL installed with its display driver, never a kernel driver.</summary>
-internal sealed class NvmlClient : IDisposable
+internal sealed class NvmlClient : IPassiveTelemetrySource
 {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int NoArgs();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int Count(out uint count);
@@ -81,6 +81,12 @@ internal sealed class NvmlClient : IDisposable
             output.Add(new("gpu." + device.Index, "GPU (NVML)", device.Name, facts));
         }
         return output;
+    }
+
+    public IReadOnlyList<MetricSample> Read(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Read(DateTimeOffset.UtcNow);
     }
 
     public IReadOnlyList<MetricSample> Read(DateTimeOffset timestamp)

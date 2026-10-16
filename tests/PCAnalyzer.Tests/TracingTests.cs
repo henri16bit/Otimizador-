@@ -83,6 +83,109 @@ public sealed class TracingTests
         Assert.Null(summary.P95Microseconds);
         Assert.Null(summary.P99Microseconds);
         Assert.Equal(LatencyAggregator.MaximumTimelineEvents, summary.PercentileSampleCount);
+        var counts = aggregate.EventCounts(LatencyAggregator.MaximumTimelineEvents + 4);
+        Assert.Equal(3, counts.AuxiliaryEvents);
+        Assert.Equal(LatencyAggregator.MaximumTimelineEvents + 1, counts.AnalyzedLatencyEvents);
+        Assert.Equal(LatencyAggregator.MaximumTimelineEvents, counts.TimelineEventsRetained);
+    }
+
+    [Fact]
+    public void EventCountsAreAdditiveAndRejectedEventsNeverBecomeAnalyzedDurations()
+    {
+        var aggregate = new LatencyAggregator();
+        aggregate.ObserveKernelImage(4, 0x1000, 100, "known.sys");
+        aggregate.ObserveLatency("DPC", 0, 0x1010, 10);
+        aggregate.ObserveLatency("TimerDPC", 0, 0x1010, 20);
+        aggregate.ObserveLatency("ThreadedDPC", 0, 0x1010, double.NaN);
+        aggregate.ObserveLatency("ISR", 0, 0x9000, 5);
+        aggregate.ObserveLatency("ISR", -1, 0x1010, 2);
+        var counts = aggregate.EventCounts(8);
+        Assert.Equal(3, counts.DpcEvents);
+        Assert.Equal(2, counts.IsrEvents);
+        Assert.Equal(3, counts.AuxiliaryEvents);
+        Assert.Equal(2, counts.RejectedLatencyEvents);
+        Assert.Equal(3, counts.AnalyzedLatencyEvents);
+        Assert.Equal(1, counts.UnmappedLatencyEvents);
+        Assert.Equal(3, counts.TimelineEventsRetained);
+        Assert.Equal(counts.TotalEtwEvents, counts.DpcEvents + counts.IsrEvents + counts.AuxiliaryEvents);
+        Assert.Equal(counts.DpcEvents + counts.IsrEvents, counts.RejectedLatencyEvents + counts.AnalyzedLatencyEvents);
+        Assert.Equal(counts.AnalyzedLatencyEvents, aggregate.Snapshot().Cpu.Sum(s => s.Count));
+        Assert.Equal(counts.AnalyzedLatencyEvents, aggregate.Snapshot().Modules.Sum(s => s.Count));
+        Assert.Throws<ArgumentOutOfRangeException>(() => aggregate.EventCounts(4));
+    }
+
+    [Fact]
+    public void InvalidRelativeClocksPreserveDurationWithoutInventingPositionOrBreakingPersistence()
+    {
+        var aggregate = new LatencyAggregator();
+        foreach (var relative in new[] { double.NaN, double.PositiveInfinity, -1d, double.MaxValue })
+            aggregate.ObserveLatency("DPC", 0, 0x1234, 10, relative);
+        var result = Result(aggregate, 4);
+        Assert.Equal(4, result.EventCounts!.AnalyzedLatencyEvents);
+        Assert.All(result.Timeline!, e => Assert.Null(e.TraceRelativeMilliseconds));
+        Assert.Empty(result.TimeBuckets!);
+        Assert.Equal(40, Assert.Single(result.CpuSummaries).TotalMicroseconds);
+        Assert.Contains(result.Limitations, limitation => limitation.Contains("4 eventos com timestamp relativo inválido"));
+        var restored = System.Text.Json.JsonSerializer.Deserialize<EtwCaptureResult>(System.Text.Json.JsonSerializer.Serialize(result))!;
+        Assert.Equal(4, restored.Timeline!.Count);
+        Assert.DoesNotContain(LatencyInterpretation.Analyze(restored), finding => finding.Category == FindingCategory.PossibleProblem);
+    }
+
+    [Fact]
+    public void LegacyTraceHistoryWithoutSeparateCountsRemainsReadableWithoutInventingCounts()
+    {
+        const string legacyJson = """
+            {"Status":0,"Detail":"Legacy ETW","StartedAt":"2026-10-14T12:00:00Z","Duration":"00:00:01",
+             "SessionName":null,"EventsSeen":9,"EventsLost":0,"Cancelled":false,"LimitReached":false,
+             "CpuSummaries":[],"ModuleSummaries":[],"Limitations":[]}
+            """;
+        var result = System.Text.Json.JsonSerializer.Deserialize<EtwCaptureResult>(legacyJson)!;
+        Assert.Null(result.EventCounts);
+        Assert.Equal(9, result.EventsSeen);
+        Assert.Contains("contagens separadas indisponíveis", LatencyInterpretation.DescribeCoverage(result));
+        Assert.Equal(FindingCategory.InsufficientData, Assert.Single(LatencyInterpretation.Analyze(result)).Category);
+    }
+
+    [Fact]
+    public void AMaximumAloneNeverNamesADriverAsTheCause()
+    {
+        var aggregate = new LatencyAggregator();
+        aggregate.ObserveKernelImage(4, 0x1000, 100, "driver.sys");
+        aggregate.ObserveLatency("DPC", 0, 0x1010, 20_000, 1000);
+        var result = Result(aggregate, 1);
+        var finding = Assert.Single(LatencyInterpretation.Analyze(result));
+        Assert.Equal(FindingCategory.InsufficientData, finding.Category);
+        Assert.Equal(Confidence.Low, finding.Confidence);
+        Assert.Equal("dpc-coverage", finding.Id);
+    }
+
+    [Fact]
+    public void PartialTraceKeepsObservedRecurrenceButRequiresCoverageWarning()
+    {
+        var aggregate = new LatencyAggregator();
+        aggregate.ObserveKernelImage(4, 0x1000, 100, "driver.sys");
+        aggregate.ObserveLatency("DPC", 0, 0x1010, 1200, 100);
+        aggregate.ObserveLatency("DPC", 0, 0x1010, 1500, 500);
+        aggregate.ObserveLatency("DPC", 0, 0x1010, 1800, 1200);
+        var result = Result(aggregate, 4) with { Status = Availability.ReadError, EventsLost = 2, Cancelled = true };
+        var findings = LatencyInterpretation.Analyze(result);
+        var recurrence = Assert.Single(findings, f => f.Category == FindingCategory.PossibleProblem);
+        Assert.Equal(Confidence.Low, recurrence.Confidence);
+        Assert.Contains("não", recurrence.Explanation);
+        Assert.Contains(findings, f => f.Id == "dpc-partial" && f.Category == FindingCategory.InsufficientData);
+        var coverage = LatencyInterpretation.DescribeCoverage(result);
+        Assert.Contains("auxiliares: 1", coverage);
+        Assert.Contains("Perdidos pela fonte: 2", coverage);
+        Assert.Equal(3, result.Timeline!.Count);
+    }
+
+    private static EtwCaptureResult Result(LatencyAggregator aggregate, long total)
+    {
+        var snapshot = aggregate.Snapshot();
+        var timeline = aggregate.TimelineSnapshot();
+        return new(Availability.Available, "Fixture ETW", DateTimeOffset.UtcNow, TimeSpan.FromSeconds(2), null,
+            total, 0, false, false, snapshot.Cpu, snapshot.Modules, snapshot.Limitations, timeline.Events,
+            timeline.Truncated, TimeBuckets: timeline.Buckets, EventCounts: aggregate.EventCounts(total));
     }
 
     [Theory]

@@ -14,7 +14,7 @@ using PCAnalyzer.Storage;
 
 namespace PCAnalyzer.App.Services;
 
-public sealed class ApplicationBackend : IApplicationBackend
+public sealed partial class ApplicationBackend : IApplicationBackend
 {
     private readonly WindowsHardwareDiscovery _discovery = new();
     private readonly WindowsTelemetryCollector _collector = new();
@@ -46,7 +46,8 @@ public sealed class ApplicationBackend : IApplicationBackend
             "Usado apenas em ações manuais com UAC. A interface roda como usuário normal."));
         capabilities.Add(new("PresentMon", Availability.ToolMissing,
             "Captura opcional: selecione o executável oficial ao iniciar. Importação CSV disponível sem a ferramenta."));
-        return inventory with { Capabilities = capabilities };
+        _lastInventory = inventory with { Capabilities = capabilities };
+        return _lastInventory;
     }
     public async Task<TelemetryBatch> CollectAsync(TimeSpan interval, CancellationToken ct)
     {
@@ -196,10 +197,11 @@ public sealed class ApplicationBackend : IApplicationBackend
         {
             await SaveArtifactAsync("frames", result.Import, CancellationToken.None);
             var description = DescribeFrames(result.Import);
-            return description with { Lines = new[] { result.Detail, "CSV real preservado localmente. Nenhuma garantia de compatibilidade com Vanguard." }.Concat(description.Lines).ToArray() };
+            return description with { Lines = new[] { result.Detail, "CSV real preservado localmente. Nenhuma garantia de compatibilidade com Vanguard." }.Concat(description.Lines).ToArray(),
+                Availability = result.Status, Cancelled = result.Cancelled, Partial = !result.Import.Complete };
         }
         return new("Captura de jogo sem resultado válido", [result.Status + ": " + result.Detail, result.Tool?.Detail ?? "Ferramenta não validada",
-            "Não existe captura válida para apresentar."], Availability: result.Status, Limitations: [result.Detail]);
+            "Não existe captura válida para apresentar."], Availability: result.Status, Limitations: [result.Detail], Cancelled: result.Cancelled);
     }
     private static TechnicalResult DescribeFrames(PresentMonImportResult result)
     {
@@ -235,8 +237,9 @@ public sealed class ApplicationBackend : IApplicationBackend
         return new("Análise de captura PresentMon", lines, metrics, series, indicators, FrameInterpretation.Analyze(result),
             result.Warnings.Concat(["Streams permanecem separadas. Até 16 streams aparecem nos indicadores e gráficos; o texto inclui todas. Até 30.000 intervalos UTC participam da correlação; o JSON bruto preserva a captura retida completa.",
                 metrics.Length > 0 ? "UTC veio da coluna de data/hora com offset explicitamente informado." : "Sem âncora UTC conhecida: correlação temporal indisponível; o horário da importação não será usado como horário dos frames."]).ToArray(),
-            result.Streams.Any(s => s.ApplicationStatistics.SampleCount > 0) ? Availability.Available : Availability.InsufficientData,
-            ComparisonKey: "frames:" + string.Join("|", result.Streams.Select(s => s.Identity.Application + ":" + s.DurationSource + ":" + s.Identity.FrameType).Distinct().Order()));
+            result.ErrorDetail is not null ? Availability.ReadError : result.Streams.Any(s => s.ApplicationStatistics.SampleCount > 0) ? Availability.Available : Availability.InsufficientData,
+            Cancelled: result.Cancelled,
+            ComparisonKey: "frames:" + string.Join("|", result.Streams.Select(s => s.Identity.Application + ":" + s.DurationSource + ":" + s.Identity.FrameType).Distinct().Order()), Partial: !result.Complete);
     }
     public async Task<TechnicalResult> CaptureDpcAsync(CancellationToken ct)
     {
@@ -275,10 +278,16 @@ public sealed class ApplicationBackend : IApplicationBackend
                 group.TakeLast(10_000).Select(e => new RelativePoint(e.TraceRelativeMilliseconds!.Value, e.DurationMicroseconds)).ToArray(),
                 result.TimelineTimeBasis, "Kernel ETW / TraceEvent; ordem temporal original, eventos individuais")).ToArray();
         return new("DPC/ISR — captura real", lines, metrics, series,
-            [new("dpc.events", "Eventos processados", result.EventsSeen, "eventos", "Inclui eventos auxiliares de imagem; não é contagem exclusiva de DPC"),
+            [new("etw.total.events", "Eventos ETW recebidos", result.EventsSeen, "eventos", "Total de todos os tipos, incluindo auxiliares"),
+             new("dpc.events", "Eventos DPC recebidos", result.EventCounts?.DpcEvents, "eventos", "DPC decodificados; consulte rejeitados e usados"),
+             new("isr.events", "Eventos ISR recebidos", result.EventCounts?.IsrEvents, "eventos", "ISR decodificados; consulte rejeitados e usados"),
+             new("etw.auxiliary.events", "Eventos auxiliares", result.EventCounts?.AuxiliaryEvents, "eventos", "Imagens e outros eventos que não são DPC/ISR"),
+             new("etw.rejected.events", "DPC/ISR incompletos", result.EventCounts?.RejectedLatencyEvents, "eventos", "Rejeitados por campos inválidos; não usados nas durações"),
+             new("etw.analyzed.events", "DPC/ISR analisados", result.EventCounts?.AnalyzedLatencyEvents, "eventos", "Eventos válidos usados nos agregados"),
              new("dpc.lost.events", "Eventos perdidos", result.EventsLost, "eventos", "Perdas tornam a cobertura parcial"),
              new("dpc.maximum.us", "Maior duração retida", result.CpuSummaries.Count > 0 ? result.CpuSummaries.Max(s => s.MaximumMicroseconds) : null, "µs", "Não representa input lag físico")],
-            LatencyInterpretation.Analyze(result), result.Limitations, result.Status, result.Cancelled, ComparisonKey: "kernel-etw:dpc-isr");
+            LatencyInterpretation.Analyze(result), result.Limitations, result.Status, result.Cancelled, ComparisonKey: "kernel-etw:dpc-isr",
+            Partial: result.EventsLost > 0 || result.LimitReached || result.TimelineTruncated || result.EventCounts?.RejectedLatencyEvents > 0);
     }
 
     public async Task<TechnicalResult> RunLabAsync(string test, string? path, IProgress<double> progress, CancellationToken ct)

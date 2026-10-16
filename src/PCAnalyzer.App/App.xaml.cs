@@ -72,11 +72,14 @@ public partial class App : Application
             var tabs = window.FindName("MainPages") as TabControl ?? throw new InvalidOperationException("As páginas principais não foram encontradas.");
             var navigation = window.FindName("Navigation") as ListBox ?? throw new InvalidOperationException("O menu principal não foi encontrado.");
             var viewModel = (MainViewModel)window.DataContext;
+            if (viewModel.VisibleSections.Count() != 6) throw new InvalidOperationException("O modo simples deve mostrar seis destinos.");
+            viewModel.InterfaceMode = "Avançado";
             var detailViews = 0;
             var initialWidth = window.Width; var initialHeight = window.Height;
             foreach (var section in viewModel.Sections)
             {
                 viewModel.NavigateCommand.Execute(section.Id);
+                if (section.Id == "resultados") viewModel.ShowTechnicalDetails = true;
                 window.UpdateLayout();
                 await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                 if (tabs.SelectedIndex != section.Tab || !Equals(navigation.SelectedItem, section) || viewModel.PageTitle != section.Name)
@@ -108,6 +111,7 @@ public partial class App : Application
             if (viewModel.SelectedSection?.Id != "resultados" || viewModel.ResultTab != 2)
                 throw new InvalidOperationException("O atalho de fontes não abriu a página correta.");
             viewModel.NavigateCommand.Execute("dashboard");
+            viewModel.InterfaceMode = "Simples";
             window.Width = window.MinWidth; window.Height = window.MinHeight;
             window.UpdateLayout();
             await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);

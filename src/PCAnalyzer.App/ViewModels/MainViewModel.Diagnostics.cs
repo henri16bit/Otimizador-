@@ -32,7 +32,7 @@ public static class TestLabels
     public static string Status(TestStatus status) => status switch
     {
         TestStatus.Preparing => "Preparando", TestStatus.Running => "Executando", TestStatus.Completed => "Finalizado",
-        TestStatus.Failed => "Falhou", TestStatus.Cancelled => "Cancelado", _ => "Não iniciado"
+        TestStatus.Failed => "Falhou", TestStatus.Cancelled => "Cancelado", TestStatus.Partial => "Resultado parcial", _ => "Não iniciado"
     };
 }
 
@@ -40,7 +40,24 @@ public sealed partial class MainViewModel
 {
     private readonly TestExecutionService _execution;
     private TestSession? _displayedExecution, _openedTest;
-    private TestDefinition _selectedTest = TestCatalog.Get("system");
+    private static readonly IReadOnlyList<TestDefinition> DiagnosticDefinitions =
+    [
+        new("general", "Analisar meu PC", "Entender o comportamento atual e receber próximos passos com evidências.",
+            "CPU, memória, GPU, discos, processos e conexão disponíveis; ping e drivers são opcionais.",
+            "30 segundos de observação; fontes opcionais e preparação podem acrescentar tempo.",
+            "Coleta de 1 s, sem carga artificial e sem alterar configurações.",
+            "Usuário normal; a opção de drivers pede confirmação e UAC.", "Coletores Windows; fontes indisponíveis ficam identificadas no relatório.",
+            "Descreve a carga observada. Fontes ausentes ou uma janela sem o sintoma podem deixar conclusões em aberto."),
+        new("gaming-analysis", "Analisar desempenho em jogos", "Observar o jogo e relacionar os dados disponíveis sem presumir a causa das travadas.",
+            "Frames do processo escolhido, telemetria do PC, conexão e fontes opcionais.",
+            "30 segundos de observação, mais espera pelo jogo, preparação e leitura da captura.",
+            "PresentMon e coleta acrescentam trabalho ao PC; não aplicam ajustes.",
+            "Executável PresentMon oficial verificado; permissões dependem do provedor ETW.",
+            "Jogo selecionado, PresentMon e coletores disponíveis.",
+            "FPS e frametime não medem input lag físico. Uma fonte ausente deixa o relatório parcial; compatibilidade com o jogo exige conferência local.")
+    ];
+    private TestDefinition _selectedTest = DiagnosticDefinitions[0];
+    private bool _findingFromResult;
     private TestRunRow? _selectedRun, _beforeRun, _afterRun;
     private string _notification = "Escolha um diagnóstico. A execução e o resultado aparecem aqui.";
     private bool _firstUse = true;
@@ -70,7 +87,7 @@ public sealed partial class MainViewModel
     public ObservableCollection<SelectionItem> DiskChoices { get; } = [];
     public SelectionItem? SelectedDisk { get => _selectedDisk; set { if (Set(ref _selectedDisk, value)) RefreshDisplay(); } }
     public bool IsStorageComponent => SelectedComponent?.Id == "nvme";
-    public IReadOnlyList<TestDefinition> TestChoices => TestCatalog.All;
+    public IReadOnlyList<TestDefinition> TestChoices { get; } = DiagnosticDefinitions.Concat(TestCatalog.All).ToArray();
     public TestDefinition SelectedTest { get => _selectedTest; set { if (Set(ref _selectedTest, value)) { StartSelectedTestCommand?.Refresh(); Notify(nameof(TestActionCaption)); } } }
     public string TestActionCaption => SelectedTest.Implemented ? "Iniciar diagnóstico…" : "Recurso indisponível";
     public string Notification { get => _notification; private set => Set(ref _notification, value); }
@@ -146,7 +163,7 @@ public sealed partial class MainViewModel
         OpenFindingCommand = new RelayCommand(parameter =>
         {
             if (parameter is not Finding finding) return;
-            if (!Findings.Contains(finding)) Findings.Add(finding);
+            _findingFromResult = true;
             SelectedFinding = finding; ResultTab = 0; Navigate("resultados");
         });
         InvestigateFindingCommand = new RelayCommand(() =>
@@ -165,6 +182,8 @@ public sealed partial class MainViewModel
     }
     private Task StartSelectedTestAsync() => SelectedTest.Id switch
     {
+        "general" => StartAnalysisAsync(false),
+        "gaming-analysis" => StartAnalysisAsync(true),
         "system" => RunTestAsync("system", ObserveSystemAsync),
         "ping" => RunTestAsync("ping", (progress, ct) => _backend.PingAsync(PingHost.Trim(), SelectedAdapter?.Id, progress, ct)),
         "cpu" or "ram" or "disk-read" => LabAsync(SelectedTest.Id),
@@ -193,34 +212,39 @@ public sealed partial class MainViewModel
     }
     private async Task RunTestAsync(string id, Func<IProgress<TestProgress>, CancellationToken, Task<TechnicalResult>> execute)
     {
-        var definition = TestCatalog.Get(id);
+        var definition = DiagnosticDefinitions.FirstOrDefault(d => d.Id == id) ?? TestCatalog.Get(id);
         var started = DateTimeOffset.UtcNow;
+        var importedCapture = id is "frames-import" or "etl-import";
         var context = new SessionContext(Workload, Mode, IntervalSeconds, Notes);
         if (id == "system") context = context with { CollectionMode = "Diagnóstico manual", IntervalSeconds = 1,
             Notes = Notes + "\nIntervalo temporário de 1 s; cada amostra preserva sua cadência real, incluindo a transição do perfil anterior." };
-        var inventory = _inventory!;
-        if (id is "frames-import" or "etl-import" && _loadedSession is { } historical)
-        { context = historical.Context; inventory = historical.Inventory; }
+        var inventory = _inventory ?? new HardwareInventory(started, [],
+            [new("Inventário", Availability.Collecting, "Identificação do hardware ainda em andamento.")]);
+        if (importedCapture)
+        {
+            context = new("Captura importada", "Arquivo local", 0,
+                "A importação preserva o relógio e as limitações do arquivo. A sessão registra o período de leitura; telemetria e alterações deste PC não foram associadas à captura.");
+            inventory = new(started, [], [new("Hardware da captura", Availability.InsufficientData,
+                "O arquivo não identifica de forma verificável todo o hardware de origem.")]);
+        }
         Notification = definition.Name + " iniciado. Acompanhe aqui ou continue navegando.";
         ExecutionLog.Clear();
         var run = await _execution.ExecuteAsync(definition, async (progress, ct) =>
         {
             var result = await execute(progress, ct);
             progress.Report(new("Organizando evidências e resultado"));
+            // Coordinated analyses already own their inventory, observation window, processes,
+            // findings and change context. Do not rebuild that session from the passive buffer.
+            if (result.Session is not null) return result;
             MetricSample[] telemetry;
-            lock (_sampleLock) telemetry = id is "frames-import" or "etl-import" ? (_loadedSession?.Samples ?? _samples).ToArray()
-                : _samples.Where(s => s.Timestamp >= started).ToArray();
-            if (id is "frames-import" or "etl-import")
-            {
-                if (result.Metrics is { Count: > 0 } imported)
-                { var first = imported.Min(s => s.Timestamp); var last = imported.Max(s => s.Timestamp); telemetry = telemetry.Where(s => s.Timestamp >= first.AddSeconds(-1) && s.Timestamp <= last.AddSeconds(1)).ToArray(); }
-                else telemetry = [];
-            }
+            lock (_sampleLock) telemetry = importedCapture ? [] : _samples.Where(s => s.Timestamp >= started).ToArray();
             var samples = telemetry.Concat(result.Metrics ?? []).ToArray();
-            var findings = _backend.Analyze(inventory, telemetry).Concat(result.Findings ?? [])
-                .Concat(TemporalDiagnosticAnalyzer.Analyze(samples)).DistinctBy(f => f.Id).ToArray();
-            IReadOnlyList<ChangeRecord> changes;
-            try { changes = await _backend.ListChangesAsync(CancellationToken.None); }
+            var legacyFindings = id is "system" or "cpu" or "ram" ? _backend.Analyze(inventory, telemetry)
+                .Where(f => id == "system" || f.Component == (id == "cpu" ? "CPU" : "RAM")) : [];
+            var findings = legacyFindings.Concat(result.Findings ?? [])
+                .Concat(id == "frames" ? TemporalDiagnosticAnalyzer.Analyze(samples) : []).DistinctBy(f => f.Id).ToArray();
+            IReadOnlyList<ChangeRecord> changes = [];
+            try { if (!importedCapture) changes = await _backend.ListChangesAsync(CancellationToken.None); }
             catch (Exception ex)
             {
                 _backend.LogError("test.change-context", ex); changes = [];
@@ -233,16 +257,14 @@ public sealed partial class MainViewModel
         }, OperationToken);
         RefreshExecutionDisplay();
         DisplayTestResult(run);
-        if (run.Result?.Metrics is { Count: > 0 } metrics)
-        {
-            lock (_sampleLock) { _samples.AddRange(metrics); TrimSamples(); }
-            foreach (var metric in metrics) if (!_latest.TryGetValue(metric.Key, out var old) || metric.Timestamp >= old.Timestamp) _latest[metric.Key] = metric;
-            RefreshDisplay(); AnalyzeDisplay();
-        }
+        // Results stay in their own session. Only the live collector publishes live readings;
+        // opening/importing a capture must never change the current PC's charts or latest values.
+        Notify(nameof(OverviewFindings));
+        string? historyWarning = null;
         try { await RefreshTestsAsync(); }
-        catch (Exception ex) { _backend.LogError("test.history.refresh", ex); Notification = "Resultado disponível; não foi possível atualizar a lista do histórico."; }
+        catch (Exception ex) { _backend.LogError("test.history.refresh", ex); historyWarning = " Resultado disponível; não foi possível atualizar a lista do histórico."; }
         Notification = $"{run.Name}: {TestLabels.Status(run.Status).ToLowerInvariant()}. " +
-            (run.PersistenceError ?? "O resumo está na visão geral; os detalhes podem ser abertos abaixo.");
+            (run.PersistenceError ?? "Resultado disponível em Resultados.") + historyWarning;
         Status = Notification;
     }
     private void OnExecutionChanged(TestSession session)
@@ -271,6 +293,8 @@ public sealed partial class MainViewModel
     }
     private void DisplayTestResult(TestSession run)
     {
+        if (_findingFromResult) SelectedFinding = null;
+        _findingFromResult = false;
         _openedTest = run;
         OperationTitle = run.Result?.Title ?? run.Name;
         OperationText = string.Join(Environment.NewLine, (run.Result?.Lines ?? []).Concat(run.Error is null ? [] : new[] { run.Error }));
@@ -278,18 +302,40 @@ public sealed partial class MainViewModel
         Replace(ResultIndicators, (run.Result?.Indicators ?? []).Select(i => new IndicatorRow(i)));
         Replace(TestFindings, run.Result?.Findings ?? []);
         Replace(ResultLimitations, run.Result?.Limitations ?? ["Não há resultado de medição completo nesta execução."]);
+        RefreshSimpleReport(run.Result);
+        UpdateLastDiagnostic(run);
         Notify(nameof(HasRelativeSeries)); Notify(nameof(OpenedResultContext)); Notify(nameof(CanExportTest)); ExportTestCommand.Refresh();
+    }
+    private void ClearOpenedResult()
+    {
+        _openedTest = null;
+        if (_findingFromResult) SelectedFinding = null;
+        _findingFromResult = false;
+        Replace(ResultIndicators, []); Replace(TestFindings, []); Replace(ResultLimitations, []);
+        Replace(ResultSeries, []); SelectedRelativeSeries = null;
+        RefreshSimpleReport(null);
+        Notify(nameof(HasRelativeSeries)); Notify(nameof(OpenedResultContext)); Notify(nameof(CanExportTest));
+        ExportTestCommand?.Refresh();
     }
     private async Task RefreshTestsAsync()
     {
         var selected = SelectedRun?.Id;
         var history = await _backend.ListTestsAsync(100, _lifetime.Token);
         Replace(TestHistory, history.Select(r => new TestRunRow(r)));
+        Replace(RecentAnalyses, TestHistory.Where(r => r.Run.TestId is "general" or "gaming-analysis").Take(5));
         SelectedRun = TestHistory.FirstOrDefault(r => r.Id == selected) ?? TestHistory.FirstOrDefault();
         if (_displayedExecution is null && TestHistory.FirstOrDefault() is { } latest)
         {
             _displayedExecution = await _backend.LoadTestAsync(latest.Id, _lifetime.Token);
             RefreshExecutionDisplay();
+        }
+        foreach (var candidate in TestHistory.Where(r => r.Run.TestId is "general" or "gaming-analysis"))
+        {
+            var analysis = _displayedExecution?.Id == candidate.Id ? _displayedExecution
+                : await _backend.LoadTestAsync(candidate.Id, _lifetime.Token);
+            if (analysis?.Result?.Report is null) continue;
+            UpdateLastDiagnostic(analysis);
+            break;
         }
         Notify(nameof(RecentTests));
     }
@@ -298,8 +344,7 @@ public sealed partial class MainViewModel
         var before = await _backend.LoadTestAsync(BeforeRun!.Id, OperationToken) ?? throw new InvalidDataException("Teste anterior ausente.");
         var after = await _backend.LoadTestAsync(AfterRun!.Id, OperationToken) ?? throw new InvalidDataException("Teste posterior ausente.");
         var result = await Task.Run(() => TestResultComparer.Compare(before, after), OperationToken);
-        _openedTest = null; Notify(nameof(CanExportTest)); ExportTestCommand.Refresh();
-        Replace(ResultIndicators, []); Replace(TestFindings, []); Replace(ResultLimitations, []);
+        ClearOpenedResult();
         await ShowResultAsync(Task.FromResult(result));
         ResultTab = 1; Navigate("resultados");
     }

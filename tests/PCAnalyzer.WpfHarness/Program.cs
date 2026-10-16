@@ -1,4 +1,6 @@
 using System.IO;
+using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,6 +9,7 @@ using PCAnalyzer.App;
 using PCAnalyzer.App.Services;
 using PCAnalyzer.App.ViewModels;
 using PCAnalyzer.Core;
+using PCAnalyzer.Gaming;
 using PCAnalyzer.Network;
 using PCAnalyzer.Storage;
 
@@ -20,6 +23,9 @@ internal static class Program
     {
         var application = new PCAnalyzer.App.App { StartupManagedByTest = true };
         application.InitializeComponent(); application.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        var bindingErrors = new BindingErrors();
+        PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Error;
+        PresentationTraceSources.DataBindingSource.Listeners.Add(bindingErrors);
         var backend = new ScenarioBackend(); var vm = new MainViewModel(backend);
         var window = new MainWindow(vm, initializeHardware: false); application.MainWindow = window;
         window.Show();
@@ -28,9 +34,11 @@ internal static class Program
             try
             {
                 await RunAsync(window, vm, backend);
+                Require(bindingErrors.Errors.Count == 0, "WPF binding failures: " + string.Join("\n", bindingErrors.Errors));
                 Directory.CreateDirectory("artifacts");
                 await File.WriteAllTextAsync("artifacts/ui-flow-result.json", JsonSerializer.Serialize(new { success = true,
-                    checks = new[] { "readable selection labels", "interrupted execution recovery", "dashboard progress", "navigation during run", "no forced navigation", "cancel", "failure", "reopen stored result", "network read and unavailable property", "missing sensors" },
+                    checks = new[] { "readable selection labels", "interrupted execution recovery", "dashboard progress", "navigation during run", "no forced navigation", "cancel", "failure", "reopen stored result", "network read and unavailable property", "missing sensors",
+                        "collection before inventory", "six simple navigation entries", "structured general report", "missing GPU is inconclusive", "report history reopen", "failure clears old report", "imports do not change live readings", "no WPF binding errors", "1366 and 1920 layout rendering", "gaming opt-in commands" },
                     fixtureDataOnly = true, hardwareOrConfigurationChanged = false }));
                 _exitCode = 0;
             }
@@ -43,15 +51,23 @@ internal static class Program
     {
         await backend.SaveTestAsync(new(Guid.NewGuid(), "ping", "Interrupted fixture", TestStatus.Running,
             DateTimeOffset.UtcNow.AddDays(-1), null, new("Fixture interrupted")));
-        await vm.InitializeAsync();
+        var initialization = vm.InitializeAsync();
+        await Until(() => backend.CollectionCalls > 0);
+        Require(!initialization.IsCompleted, "Basic collection must start while detailed inventory is pending.");
+        backend.InventoryReady.SetResult();
+        await initialization;
         Require(vm.ExecutionState == "Falhou" && vm.ExecutionElapsed == "Desconhecido" && !vm.TestIsActive,
             "Interrupted execution must not display an invented duration or restart.");
         Require(vm.OverviewCards.All(c => c.Value == "—"), "Unavailable sensors must not become zero.");
         vm.SelectedTest = TestCatalog.Get("ping");
+        Require(vm.VisibleSections.Select(s => s.Id).SequenceEqual(new[] { "dashboard", "analisar", "resultados", "ajustes", "avancado", "config" }), "Simple navigation differs from the six intended destinations.");
+        vm.NavigateCommand.Execute("analisar");
         window.UpdateLayout();
-        var testSelector = Descendants<ComboBox>(window).Single(c => c.SelectedItem is TestDefinition);
-        Require(Descendants<TextBlock>(testSelector).Any(t => t.Text == vm.SelectedTest.Name),
-            "Test selector must show the human-readable name, not the record's technical description.");
+        var durationSelector = Descendants<ComboBox>(window).Single(c => ReferenceEquals(c.ItemsSource, vm.ObservationDurations));
+        Require(Descendants<TextBlock>(durationSelector).Any(t => t.Text.Contains("30")), "Duration must have a readable label.");
+        Require(vm.AnalyzePcCommand.CanExecute(null) && vm.AnalyzeGamesCommand.CanExecute(null) && !vm.IncludeLatency && !vm.IncludePing,
+            "Guided commands must be available and optional active probes disabled by default.");
+        vm.NavigateCommand.Execute("dashboard");
         vm.StartSelectedTestCommand.Execute(null);
         await Until(() => vm.TestIsActive && vm.ExecutionStage == "Fixture: pacote 1 de 20");
         window.UpdateLayout();
@@ -79,7 +95,7 @@ internal static class Program
         vm.SelectedRun = vm.TestHistory.Single(r => r.Id == firstId); vm.OpenTestCommand.Execute(null); await Until(() => !vm.IsBusy);
         Require(vm.OperationTitle == "Fixture: rede concluída" && vm.ResultSeries.Count == 1 && vm.SelectedSection?.Id == "resultados", "Saved test did not reopen.");
         Require(vm.ExecutionState == "Falhou" && !vm.ExecutionIndicators.Any(), "Opening old result corrupted latest dashboard run.");
-        vm.OpenInvestigationCommand.Execute("rede"); vm.DiscoverNetworkCommand.Execute(null); await Until(() => !vm.IsBusy);
+        vm.OpenInvestigationCommand.Execute("rede"); await Until(() => vm.NetworkSettings.Count == 1);
         Require(vm.SelectedAdapter?.Name.Contains("fixture") == true, "Adapter selection missing.");
         vm.InspectNetworkCommand.Execute(null); await Until(() => !vm.IsBusy);
         Require(vm.NetworkSettings.Count == 1 && !vm.NetworkPreviewCommand.CanExecute(null), "Unsupported driver property appears writable.");
@@ -89,8 +105,40 @@ internal static class Program
         Require(Descendants<TextBlock>(adapterSelector).Any(t => t.Text == vm.SelectedAdapter!.Name), "Adapter selector must show a readable name.");
         var diagnostics = new StartupDiagnostics(["--smoke-test", "--smoke-output", "artifacts/ui-flow-screenshot.json"]);
         diagnostics.CaptureView((FrameworkElement)window.Content, "network-fixture");
+
+        await RunFixture(vm, "general", (progress, ct) => backend.AnalyzePcAsync(new(ObservationSeconds: 1), progress, _ => { }, ct));
+        Require(vm.HasDiagnostic && vm.HasSimpleReport && vm.CanExportTest && vm.ReportComponents.Count >= 8, "General analysis lost its structured report.");
+        Require(vm.ReportComponents.Single(c => c.Id == "gpu").State == DiagnosticAssessmentState.Inconclusive, "Missing GPU must remain inconclusive.");
+        Require(vm.ReportComponents.Single(c => c.Id == "cpu").State == DiagnosticAssessmentState.Normal, "Independent CPU evidence was lost.");
+        var analysisId = vm.RecentAnalyses.First().Id;
+        var report = (await backend.LoadTestAsync(analysisId))?.Result?.Report;
+        Require(report?.Completion == DiagnosticCompletion.Partial && report.Components.Count == vm.ReportComponents.Count, "Structured partial report did not survive SQLite.");
+        typeof(MainViewModel).GetMethod("RecordFailure", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(vm, ["fixture action", new IOException("fixture failure")]);
+        Require(!vm.CanExportTest && !vm.HasSimpleReport && vm.ResultIndicators.Count == 0 && vm.TestFindings.Count == 0 && vm.ResultSeries.Count == 0,
+            "Operational failure retained stale report/export/indicators.");
+        Require(vm.HasDiagnostic, "An unrelated operation failure erased the last diagnostic summary.");
+        vm.SelectedRun = vm.TestHistory.Single(r => r.Id == analysisId); vm.OpenTestCommand.Execute(null); await Until(() => !vm.IsBusy);
+        Require(vm.HasSimpleReport && vm.ReportComponents.Count == report!.Components.Count, "History did not restore the simple report.");
+        window.UpdateLayout(); diagnostics.CaptureView((FrameworkElement)window.Content, "report-fixture");
+        await RunFixture(vm, "frames-import", (_, _) => Task.FromResult(new TechnicalResult("Imported fixture", ["Fixture only"],
+            Metrics: [new("frames.fixture.ms", "Jogos", 17, "ms", "fixture", "fixture", DateTimeOffset.UtcNow, TimeSpan.Zero)])));
+        var latest = (Dictionary<string, MetricSample>)typeof(MainViewModel).GetField("_latest", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm)!;
+        Require(!latest.ContainsKey("frames.fixture.ms") && !vm.HasSimpleReport, "Imported capture polluted current telemetry or retained the prior report.");
         vm.NavigateCommand.Execute("dashboard"); window.UpdateLayout();
         diagnostics.CaptureView((FrameworkElement)window.Content, "dashboard-fixture");
+        foreach (var size in new[] { (1366d, 768d), (1920d, 1080d) })
+        {
+            window.Width = size.Item1; window.Height = size.Item2; window.UpdateLayout();
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Require(window.ActualWidth >= size.Item1 - 1 && window.ActualHeight >= size.Item2 - 1, "Requested layout dimensions were not rendered.");
+            diagnostics.CaptureView((FrameworkElement)window.Content, "dashboard-" + size.Item1);
+        }
+    }
+    private static Task RunFixture(MainViewModel vm, string id, Func<IProgress<TestProgress>, CancellationToken, Task<TechnicalResult>> run)
+    {
+        var execute = typeof(MainViewModel).GetMethod("RunTestAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var operation = typeof(MainViewModel).GetMethod("RunOperationAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        return (Task)operation.Invoke(vm, [new Func<Task>(() => (Task)execute.Invoke(vm, [id, run])!)])!;
     }
     private static async Task Until(Func<bool> condition)
     {
@@ -104,6 +152,12 @@ internal static class Program
         for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
         { var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i); if (child is T match) yield return match; foreach (var nested in Descendants<T>(child)) yield return nested; }
     }
+    private sealed class BindingErrors : TraceListener
+    {
+        public List<string> Errors { get; } = [];
+        public override void Write(string? message) { if (!string.IsNullOrWhiteSpace(message)) Errors.Add(message); }
+        public override void WriteLine(string? message) => Write(message);
+    }
 }
 
 /// <summary>Test-only backend. This project and its fixtures are never packaged with the application.</summary>
@@ -114,10 +168,29 @@ internal sealed class ScenarioBackend : IApplicationBackend
     private readonly Guid _adapter = Guid.NewGuid();
     public string Mode { get; set; } = "complete";
     public TaskCompletionSource<TechnicalResult> FinishPing { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource InventoryReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public int CollectionCalls;
     public ScenarioBackend() => _history = new(Path.Combine(DataDirectory, "fixture.db"));
-    public Task<HardwareInventory> InitializeAsync(CancellationToken ct) => Task.FromResult(new HardwareInventory(DateTimeOffset.UtcNow, [], [new("Fixture sensor", Availability.Unsupported, "Test only")]));
-    public Task<TelemetryBatch> CollectAsync(TimeSpan interval, CancellationToken ct) => Task.FromResult(new TelemetryBatch(DateTimeOffset.UtcNow,
-        [MetricSample.Missing("cpu.total.percent", "CPU", "%", "fixture", DateTimeOffset.UtcNow, Availability.Unsupported, "fixture only")], []));
+    public async Task<HardwareInventory> InitializeAsync(CancellationToken ct) { await InventoryReady.Task.WaitAsync(ct); return new(DateTimeOffset.UtcNow, [], [new("Fixture sensor", Availability.Unsupported, "Test only")]); }
+    public Task<TelemetryBatch> CollectAsync(TimeSpan interval, CancellationToken ct)
+    {
+        Interlocked.Increment(ref CollectionCalls);
+        return Task.FromResult(new TelemetryBatch(DateTimeOffset.UtcNow,
+            [MetricSample.Missing("cpu.total.percent", "CPU", "%", "fixture", DateTimeOffset.UtcNow, Availability.Unsupported, "fixture only")], []));
+    }
+    public Task ResetTelemetryAsync(CancellationToken ct) => Task.CompletedTask;
+    public Task<PresentMonToolInspection> InspectPresentMonAsync(string path, CancellationToken ct) => Task.FromResult(new PresentMonToolInspection(path, Availability.ToolMissing, null, PresentMonCliStyle.Unsupported, "Fixture; no executable started", []));
+    public Task<TechnicalResult> AnalyzePcAsync(DiagnosticOptions options, IProgress<TestProgress> progress, Action<TelemetryBatch> publishBatch, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var inventory = new HardwareInventory(now, [], []);
+        var samples = Enumerable.Range(0, 12).Select(i => new MetricSample("cpu.total.percent", "CPU", 20, "%", "fixture", "test-only",
+            now.AddSeconds(i - 12), TimeSpan.FromSeconds(1))).ToArray();
+        var report = new DiagnosticAnalysisEngine().Analyze(inventory, samples, [], [], []);
+        var session = new DiagnosticSession(Guid.NewGuid(), "Fixture general", now.AddSeconds(-12), now, new("Fixture", "test-only", 1), inventory, samples, report.Findings);
+        return Task.FromResult(new TechnicalResult("Fixture general", [report.Summary], samples, Findings: report.Findings,
+            Limitations: report.Limitations, Session: session, Report: report, Partial: true));
+    }
     public IReadOnlyList<Finding> Analyze(HardwareInventory inventory, IReadOnlyList<MetricSample> samples) => new DiagnosticRuleEngine().Analyze(inventory, samples);
     public Task SaveSessionAsync(DiagnosticSession session, CancellationToken ct) => _history.SaveSessionAsync(session, ct);
     public Task<IReadOnlyList<SessionSummary>> ListSessionsAsync(CancellationToken ct) => _history.ListSessionsAsync(cancellationToken: ct);

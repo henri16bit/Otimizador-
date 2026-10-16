@@ -41,7 +41,8 @@ public sealed record SessionContext(string Workload, string CollectionMode, doub
     string Notes = "", string? HardwareFingerprint = null);
 public sealed record DiagnosticSession(Guid Id, string Label, DateTimeOffset StartedAt, DateTimeOffset? EndedAt,
     SessionContext Context, HardwareInventory Inventory, IReadOnlyList<MetricSample> Samples,
-    IReadOnlyList<Finding> Findings, IReadOnlyList<ChangeRecord>? Changes = null);
+    IReadOnlyList<Finding> Findings, IReadOnlyList<ChangeRecord>? Changes = null,
+    IReadOnlyList<ProcessSample>? Processes = null);
 public sealed record SessionSummary(Guid Id, string Label, DateTimeOffset StartedAt, DateTimeOffset? EndedAt,
     int SampleCount, string Workload);
 public sealed record ChangeRecord(Guid Id, string Kind, string Target, string Before, string After,

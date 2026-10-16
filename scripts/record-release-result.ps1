@@ -18,6 +18,14 @@ if (Test-Path -LiteralPath artifacts/ui-flow-result.json) {
 if (Test-Path -LiteralPath artifacts/ui-flow-startup.json) {
     $result['uiFlowStartup'] = Get-Content -LiteralPath artifacts/ui-flow-startup.json -Raw | ConvertFrom-Json
 }
+$hardware = Get-ChildItem artifacts/windows-verification -Filter validation-result.json -Recurse -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+if ($hardware) { $result['hardware'] = Get-Content -LiteralPath $hardware.FullName -Raw | ConvertFrom-Json }
+$testRun = Get-ChildItem tests/PCAnalyzer.Tests/TestResults -Filter '*.trx' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+if ($testRun) {
+    [xml]$testXml = Get-Content -LiteralPath $testRun.FullName -Raw
+    $counts = $testXml.TestRun.ResultSummary.Counters
+    $result['tests'] = @{ total = [int]$counts.total; passed = [int]$counts.passed; failed = [int]$counts.failed; notExecuted = [int]$counts.notExecuted }
+}
 if ($steps.ui_flows.outcome -ne 'success') {
     foreach ($stream in @('stdout', 'stderr')) {
         $logPath = "artifacts/ui-flow-$stream.txt"

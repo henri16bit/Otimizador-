@@ -104,7 +104,8 @@ public sealed class EtwTraceService
         return new(status, errors.Count > 0 ? "A captura retornou dados parciais ou falhou: " + errors[0] :
             data.Cpu.Count == 0 ? "Nenhum evento DPC/ISR válido recebido; ausência de dados não prova baixa latência." : "DPC/ISR obtidos diretamente de eventos do kernel ETW.",
             started, timer.Elapsed, sessionName, state.EventsSeen, lost, cancelled, state.LimitReached, data.Cpu, data.Modules, limitations,
-            timeline.Events, timeline.Truncated, TraceStartUtc: traceStartUtc, TimeBuckets: timeline.Buckets);
+            timeline.Events, timeline.Truncated, TraceStartUtc: traceStartUtc, TimeBuckets: timeline.Buckets,
+            EventCounts: aggregate.EventCounts(state.EventsSeen));
     }
 
     public async Task<EtwCaptureResult> ImportAsync(string etlPath, CancellationToken cancellationToken = default)
@@ -125,29 +126,37 @@ public sealed class EtwTraceService
         var started = DateTimeOffset.UtcNow;
         var aggregate = new LatencyAggregator();
         var state = new ParseState(2_000_000);
+        var errors = new List<string>();
+        var lost = 0;
+        DateTimeOffset? traceStartUtc = null;
         try
         {
             using var source = new ETWTraceEventSource(path);
+            traceStartUtc = new DateTimeOffset(source.SessionStartTime.ToUniversalTime());
             Subscribe(source, aggregate, state);
             using var registration = cancellationToken.Register(source.StopProcessing);
-            source.Process();
-            var data = aggregate.Snapshot();
-            var timeline = aggregate.TimelineSnapshot();
-            var limitations = data.Limitations.ToList();
-            if (source.EventsLost > 0) limitations.Add($"ETL informa {source.EventsLost} eventos perdidos; resumo incompleto.");
-            if (state.LimitReached) limitations.Add("Importação atingiu 2.000.000 de eventos: resumo parcial.");
-            if (cancellationToken.IsCancellationRequested) limitations.Add("Importação cancelada: resumo parcial.");
-            return new(data.Cpu.Count == 0 ? Availability.InsufficientData : Availability.Available,
-                data.Cpu.Count == 0 ? "O ETL não contém eventos DPC/ISR válidos." : "ETL existente importado; arquivo original preservado.",
-                new DateTimeOffset(source.SessionStartTime.ToUniversalTime()), TimeSpan.FromMilliseconds(Math.Max(0, state.LastTimeMilliseconds)),
-                null, state.EventsSeen, source.EventsLost, cancellationToken.IsCancellationRequested, state.LimitReached,
-                data.Cpu, data.Modules, limitations, timeline.Events, timeline.Truncated,
-                TraceStartUtc: new DateTimeOffset(source.SessionStartTime.ToUniversalTime()), TimeBuckets: timeline.Buckets);
+            try { source.Process(); }
+            finally { lost = source.EventsLost; }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or COMException or InvalidOperationException or ArgumentException)
         {
-            return Missing(Availability.ReadError, "Não foi possível decodificar o ETL: " + e.Message, started);
+            errors.Add("A decodificação do ETL foi interrompida: " + e.Message);
         }
+        var data = aggregate.Snapshot();
+        var timeline = aggregate.TimelineSnapshot();
+        var limitations = data.Limitations.ToList();
+        if (lost > 0) limitations.Add($"ETL informa {lost} eventos perdidos; resumo incompleto.");
+        if (state.LimitReached) limitations.Add("Importação atingiu 2.000.000 de eventos: resumo parcial.");
+        if (cancellationToken.IsCancellationRequested) limitations.Add("Importação cancelada: resumo parcial.");
+        limitations.AddRange(errors);
+        return new(errors.Count > 0 ? Availability.ReadError : data.Cpu.Count == 0 ? Availability.InsufficientData : Availability.Available,
+            errors.Count > 0 ? "ETL lido parcialmente; os eventos válidos anteriores ao erro foram preservados. " + errors[0] :
+            data.Cpu.Count == 0 ? "O ETL não contém eventos DPC/ISR válidos." : "ETL existente importado; arquivo original preservado.",
+            traceStartUtc ?? started, TimeSpan.FromMilliseconds(Math.Max(0, state.LastTimeMilliseconds)),
+            null, state.EventsSeen, lost, cancellationToken.IsCancellationRequested, state.LimitReached,
+            data.Cpu, data.Modules, limitations, timeline.Events, timeline.Truncated,
+            TraceStartUtc: traceStartUtc, TimeBuckets: timeline.Buckets,
+            EventCounts: aggregate.EventCounts(state.EventsSeen));
     }
 
     private static void Subscribe(ETWTraceEventSource source, LatencyAggregator aggregate, ParseState state)
@@ -155,7 +164,9 @@ public sealed class EtwTraceService
         source.AllEvents += data =>
         {
             state.EventsSeen++;
-            state.LastTimeMilliseconds = Math.Max(state.LastTimeMilliseconds, data.TimeStampRelativeMSec);
+            var relativeMilliseconds = data.TimeStampRelativeMSec;
+            if (double.IsFinite(relativeMilliseconds) && relativeMilliseconds >= 0 && relativeMilliseconds < TimeSpan.MaxValue.TotalMilliseconds)
+                state.LastTimeMilliseconds = Math.Max(state.LastTimeMilliseconds, relativeMilliseconds);
             if (state.EventsSeen >= state.MaximumEvents) { state.LimitReached = true; source.StopProcessing(); }
         };
         source.Kernel.ImageLoadGroup += data => aggregate.ObserveKernelImage(data.ProcessID, data.ImageBase, data.ImageSize, data.FileName);

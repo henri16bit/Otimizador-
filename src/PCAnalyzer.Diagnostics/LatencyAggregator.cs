@@ -17,6 +17,10 @@ public sealed class LatencyAggregator
     private readonly Dictionary<(long Second, string Kind), Counter> timeBuckets = [];
     private long invalidEvents;
     private long unmappedEvents;
+    private long dpcEvents;
+    private long isrEvents;
+    private long analyzedEvents;
+    private long invalidTimestamps;
     private bool boundReached;
     private bool timelineTruncated;
     private bool timeBucketsTruncated;
@@ -45,8 +49,17 @@ public sealed class LatencyAggregator
             throw new ArgumentException("Tipo ETW desconhecido.", nameof(kind));
         lock (gate)
         {
+            if (kind == "ISR") isrEvents++; else dpcEvents++;
             if (processor < 0 || processor > 65_535 || !double.IsFinite(microseconds) || microseconds < 0)
             { invalidEvents++; return; }
+            analyzedEvents++;
+            if (traceRelativeMilliseconds is { } relative && (!double.IsFinite(relative) || relative < 0 || relative >= TimeSpan.MaxValue.TotalMilliseconds))
+            {
+                // A malformed clock does not invalidate an independently measured duration.
+                // Keep the duration, but never serialize a nonfinite number or invent a timestamp.
+                traceRelativeMilliseconds = null;
+                invalidTimestamps++;
+            }
             string? module = null;
             var matches = 0;
             foreach (var image in images.Values)
@@ -85,6 +98,7 @@ public sealed class LatencyAggregator
             };
             if (unmappedEvents > 0) limitations.Add($"{unmappedEvents} eventos sem uma faixa de módulo única: módulo desconhecido.");
             if (invalidEvents > 0) limitations.Add($"{invalidEvents} eventos com CPU/duração inválida foram descartados.");
+            if (invalidTimestamps > 0) limitations.Add($"{invalidTimestamps} eventos com timestamp relativo inválido: duração preservada, posição temporal indisponível.");
             if (boundReached) limitations.Add("Limite de imagens/grupos atingido: os resumos podem estar incompletos.");
             if (timelineTruncated) limitations.Add("Timeline limitada aos primeiros 100.000 eventos válidos. Percentis de um grupo só aparecem quando todas as suas durações foram preservadas; não extrapolam uma amostra parcial.");
             if (timeBucketsTruncated) limitations.Add("Limite de 4.096 intervalos/tipos de recorrência atingido: série temporal parcial.");
@@ -107,6 +121,17 @@ public sealed class LatencyAggregator
                 timeBuckets.Select(p => new LatencyTimeBucket(p.Key.Second * 1000d,
                     (p.Key.Second + 1d) * 1000d, p.Key.Kind, p.Value.Count, p.Value.Total, p.Value.Maximum))
                     .OrderBy(p => p.StartMilliseconds).ThenBy(p => p.Kind).ToArray());
+    }
+
+    public EtwEventCounts EventCounts(long totalEtwEvents)
+    {
+        lock (gate)
+        {
+            if (totalEtwEvents < dpcEvents + isrEvents)
+                throw new ArgumentOutOfRangeException(nameof(totalEtwEvents), "O total ETW não pode ser menor que os eventos DPC/ISR decodificados.");
+            return new(totalEtwEvents, dpcEvents, isrEvents, totalEtwEvents - dpcEvents - isrEvents,
+                invalidEvents, analyzedEvents, unmappedEvents, timeline.Count);
+        }
     }
 
     private void Add<TKey>(Dictionary<TKey, Counter> target, TKey key, double duration) where TKey : notnull

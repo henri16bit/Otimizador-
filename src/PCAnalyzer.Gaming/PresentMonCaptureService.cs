@@ -25,12 +25,18 @@ public sealed partial class PresentMonCaptureService
             return new(executablePath, Availability.Unsupported, null, PresentMonCliStyle.Unsupported, "É necessário selecionar diretamente um executável .exe; scripts e comandos de shell não são executados.", []);
         try
         {
+            // Hold the file against replacement/write throughout verification and the help probe.
+            using var readLease = new FileStream(executablePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var signature = PresentMonSignatureVerifier.Inspect(executablePath);
+            if (signature.Status != PresentMonSignatureStatus.TrustedPublisher)
+                return new(executablePath, Availability.Unsupported, null, PresentMonCliStyle.Unsupported, signature.Detail, [],
+                    signature.Publisher, signature.Status);
             var probe = await RunAsync(executablePath, ["--help"], TimeSpan.FromSeconds(8), cancellationToken).ConfigureAwait(false);
             if (probe.TimedOut)
-                return new(executablePath, Availability.Unsupported, null, PresentMonCliStyle.Unsupported, "O executável não respondeu a --help no prazo; captura recusada.", []);
+                return new(executablePath, Availability.Unsupported, null, PresentMonCliStyle.Unsupported, "O executável não respondeu a --help no prazo; captura recusada.", [], signature.Publisher, signature.Status);
             var version = VersionPattern().Match(probe.Output);
             if (!version.Success)
-                return new(executablePath, Availability.Unsupported, null, PresentMonCliStyle.Unsupported, "A saída de ajuda não identifica uma versão PresentMon Console. Use uma versão oficial compatível ou importe o CSV manualmente.", []);
+                return new(executablePath, Availability.Unsupported, null, PresentMonCliStyle.Unsupported, "A saída de ajuda não identifica uma versão PresentMon Console. Use uma versão oficial compatível ou importe o CSV manualmente.", [], signature.Publisher, signature.Status);
             var found = OptionPattern().Matches(probe.Output).Select(x => x.Groups[1].Value).Distinct(StringComparer.Ordinal).ToArray();
             var modern = RequiredOptions.All(x => found.Contains("--" + x, StringComparer.Ordinal));
             var legacy = RequiredOptions.All(x => found.Contains("-" + x, StringComparer.Ordinal));
@@ -38,7 +44,8 @@ public sealed partial class PresentMonCaptureService
             return new(executablePath, style == PresentMonCliStyle.Unsupported ? Availability.Unsupported : Availability.Available,
                 version.Groups[1].Value, style,
                 style == PresentMonCliStyle.Unsupported ? "Ajuda incompleta ou CLI não reconhecida: faltam opções para captura limitada por PID, tempo e sessão exclusiva. Importe CSV em vez de adivinhar argumentos." :
-                "Ajuda e versão inspecionadas. A captura usa uma sessão ETW exclusiva e preserva frames descartados; nenhuma elevação automática ou mudança no Vanguard é solicitada.", found);
+                "Assinatura, editor, ajuda e versão inspecionados. A captura usa uma sessão ETW exclusiva e preserva frames descartados; nenhuma elevação automática ou mudança no Vanguard é solicitada.", found,
+                signature.Publisher, signature.Status);
         }
         catch (Exception ex) when (ex is Win32Exception or IOException or UnauthorizedAccessException)
         {
@@ -48,6 +55,25 @@ public sealed partial class PresentMonCaptureService
     }
 
     public async Task<PresentMonCaptureResult> CaptureAsync(PresentMonCaptureRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        try
+        {
+            // Keep the same file immutable from signature/help inspection through capture and
+            // session cleanup. A second process cannot replace it between the verified launches.
+            using var readLease = OperatingSystem.IsWindows() && Path.IsPathFullyQualified(request.ExecutablePath) && File.Exists(request.ExecutablePath)
+                ? new FileStream(request.ExecutablePath, FileMode.Open, FileAccess.Read, FileShare.Read) : null;
+            return await CaptureCoreAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new(ex is UnauthorizedAccessException ? Availability.PermissionRequired : Availability.ReadError,
+                "Não foi possível manter o executável selecionado disponível para verificação e captura. " + ex.Message,
+                request.OutputCsvPath, null);
+        }
+    }
+
+    private async Task<PresentMonCaptureResult> CaptureCoreAsync(PresentMonCaptureRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.ProcessId <= 0) throw new ArgumentOutOfRangeException(nameof(request.ProcessId));
@@ -94,25 +120,41 @@ public sealed partial class PresentMonCaptureService
             var execution = await RunOwnedCaptureAsync(request.ExecutablePath, arguments, request.Duration + TimeSpan.FromSeconds(30),
                 prefix, sessionName, cancellationToken).ConfigureAwait(false);
             if (execution.TimedOut)
-                return new(Availability.ReadError, "PresentMon excedeu o prazo. O subprocesso iniciado pelo aplicativo foi encerrado e a ausência de sua sessão ETW exclusiva foi verificada. O CSV parcial foi preservado para inspeção.",
-                    request.OutputCsvPath, inspection, ExitCode: execution.ExitCode, ProcessOutput: execution.Output);
+                return await PresentMonPartialCapture.ReadFailureAsync(request, inspection,
+                    "PresentMon excedeu o prazo. O subprocesso iniciado pelo aplicativo foi encerrado e a ausência de sua sessão ETW exclusiva foi verificada.",
+                    exitCode: execution.ExitCode, processOutput: execution.Output).ConfigureAwait(false);
             if (execution.ExitCode != 0 || !File.Exists(request.OutputCsvPath))
             {
                 var denied = PermissionPattern().IsMatch(execution.Output);
-                return new(denied ? Availability.PermissionRequired : Availability.ReadError,
+                return await PresentMonPartialCapture.ReadFailureAsync(request, inspection,
                     denied ? "PresentMon informou falta de permissão para ETW. Execute uma nova captura com as permissões necessárias; nenhuma alteração de segurança foi aplicada." : "PresentMon não concluiu a captura ou não produziu o CSV solicitado. Consulte a saída do subprocesso.",
-                    request.OutputCsvPath, inspection, ExitCode: execution.ExitCode, ProcessOutput: execution.Output);
+                    denied ? Availability.PermissionRequired : Availability.ReadError, execution.ExitCode, execution.Output).ConfigureAwait(false);
             }
             var options = (request.ParseOptions ?? new PresentMonParseOptions()) with { ProcessId = request.ProcessId };
             var import = await new PresentMonCsvParser().ImportFileAsync(request.OutputCsvPath, options, cancellationToken).ConfigureAwait(false);
-            var status = import.Streams.Any(x => x.ApplicationStatistics.SampleCount > 0) ? Availability.Available : Availability.InsufficientData;
-            return new(status, status == Availability.Available ? "Captura concluída. Estatísticas de cada swap chain e tipo de frame permanecem separadas." :
-                "Captura concluída sem intervalos válidos do PID selecionado. Confirme que o jogo estava renderizando e repita a coleta.", request.OutputCsvPath, inspection, import, execution.ExitCode, execution.Output);
+            var status = import.ErrorDetail is not null ? Availability.ReadError :
+                import.Streams.Any(x => x.ApplicationStatistics.SampleCount > 0) ? Availability.Available : Availability.InsufficientData;
+            return new(status, import.Cancelled ? "Leitura do CSV cancelada; frames já lidos foram preservados." :
+                import.ErrorDetail is not null ? "O CSV foi lido parcialmente; frames anteriores ao erro foram preservados. " + import.ErrorDetail :
+                !import.Complete ? "Captura encerrada; a importação atingiu seu limite. Estatísticas descrevem os frames retidos." :
+                status == Availability.Available ? "Captura concluída. Estatísticas de cada swap chain e tipo de frame permanecem separadas." :
+                "Captura concluída sem intervalos válidos do PID selecionado. Confirme que o jogo estava renderizando e repita a coleta.", request.OutputCsvPath, inspection, import, execution.ExitCode, execution.Output, import.Cancelled);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return await PresentMonPartialCapture.ReadCancelledAsync(request, inspection,
+                "Captura cancelada; o subprocesso próprio foi encerrado e sua sessão ETW exclusiva foi verificada.").ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is Win32Exception or IOException or UnauthorizedAccessException or PresentMonFormatException)
         {
-            return new(ex is UnauthorizedAccessException ? Availability.PermissionRequired : Availability.ReadError,
-                $"Falha na captura/importação: {ex.Message}", request.OutputCsvPath, inspection);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                var partial = await PresentMonPartialCapture.ReadCancelledAsync(request, inspection,
+                    "Captura cancelada com erro de leitura ou encerramento: " + ex.Message).ConfigureAwait(false);
+                return partial with { Status = Availability.ReadError };
+            }
+            return await PresentMonPartialCapture.ReadFailureAsync(request, inspection, $"Falha na captura/importação: {ex.Message}",
+                ex is UnauthorizedAccessException ? Availability.PermissionRequired : Availability.ReadError).ConfigureAwait(false);
         }
     }
 

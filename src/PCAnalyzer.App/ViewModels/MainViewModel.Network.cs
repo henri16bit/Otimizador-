@@ -16,8 +16,11 @@ public sealed record NetworkAdapterRow(NetworkAdapter Adapter)
 public sealed partial class MainViewModel
 {
     private NetworkAdapterRow? _selectedAdapter;
-    private string _networkReadStatus = "Clique em Detectar conexões. Depois escolha o adaptador e leia os detalhes.";
+    private string _networkReadStatus = "A conexão ativa será identificada ao abrir esta tela.";
     private string _networkDriver = "Driver ainda não consultado.";
+    private Task? _automaticNetworkTask;
+    private bool _networkDiscovered, _selectingNetwork, _automaticNetworkInProgress;
+    private Guid? _lastAutomaticAdapter;
     public ObservableCollection<NetworkAdapterRow> NetworkAdapters { get; } = [];
     public ObservableCollection<HardwareRow> NetworkFacts { get; } = [];
     public NetworkAdapterRow? SelectedAdapter
@@ -27,8 +30,9 @@ public sealed partial class MainViewModel
         {
             if (!Set(ref _selectedAdapter, value)) return;
             NetworkFacts.Clear(); NetworkSettings.Clear(); SelectedNetworkSetting = null;
-            NetworkDriver = "Clique em Ler detalhes do adaptador para consultar o driver e as propriedades.";
+            NetworkDriver = "Aguardando a leitura do adaptador escolhido…";
             InspectNetworkCommand?.Refresh(); Notify(nameof(NetworkSelectionNote));
+            if (!_selectingNetwork) EnsureNetworkLoaded();
         }
     }
     public string NetworkReadStatus { get => _networkReadStatus; private set => Set(ref _networkReadStatus, value); }
@@ -40,9 +44,43 @@ public sealed partial class MainViewModel
     public RelayCommand ReviewNetworkSettingCommand { get; private set; } = null!;
     private void InitializeNetworkCommands()
     {
-        DiscoverNetworkCommand = Command(DiscoverNetworkAsync);
+        DiscoverNetworkCommand = Command(async () => { await DiscoverNetworkAsync(); await InspectNetworkAsync(); });
         InspectNetworkCommand = Command(InspectNetworkAsync, () => SelectedAdapter is not null);
         ReviewNetworkSettingCommand = new RelayCommand(() => Navigate("ajustes"));
+    }
+    private void EnsureNetworkLoaded()
+    {
+        if (_closing || _inventory is null || IsBusy || _automaticNetworkInProgress) return;
+        if (_networkDiscovered && SelectedAdapter?.Id == _lastAutomaticAdapter) return;
+        _automaticNetworkInProgress = true;
+        _automaticNetworkTask = LoadNetworkAutomaticallyAsync();
+    }
+    private async Task LoadNetworkAutomaticallyAsync()
+    {
+        Guid? attempted = null;
+        try
+        {
+            if (!_networkDiscovered) await DiscoverNetworkAsync();
+            if (_closing) return;
+            attempted = SelectedAdapter?.Id;
+            _lastAutomaticAdapter = attempted;
+            if (attempted is not null) await InspectNetworkAsync();
+        }
+        catch (OperationCanceledException) when (_closing) { }
+        catch (Exception error)
+        {
+            _backend.LogError("network.automatic-read", error);
+            // Do not erase a diagnostic report because an independent read failed.
+            if (!_closing) Notification = "A leitura da rede falhou. Use Atualizar conexões para tentar novamente.";
+        }
+        finally
+        {
+            _networkDiscovered = true;
+            _automaticNetworkInProgress = false;
+            // A selection made while the previous read was pending is serviced after it ends.
+            if (!_closing && SelectedAdapter?.Id != attempted)
+                _ = System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(EnsureNetworkLoaded));
+        }
     }
     private async Task DiscoverNetworkAsync()
     {
@@ -50,18 +88,32 @@ public sealed partial class MainViewModel
         try
         {
             var snapshot = await _backend.DiscoverNetworkAsync(OperationToken);
+            _networkDiscovered = true;
             var previous = SelectedAdapter?.Id;
             Replace(NetworkAdapters, snapshot.Adapters.OrderByDescending(a => a.Status == "Up").ThenBy(a => a.Name).Select(a => new NetworkAdapterRow(a)));
-            SelectedAdapter = NetworkAdapters.FirstOrDefault(a => a.Id == previous)
-                ?? NetworkAdapters.FirstOrDefault(a => a.Adapter.Status == "Up" && a.Adapter.Gateways.Count > 0) ?? NetworkAdapters.FirstOrDefault();
-            NetworkReadStatus = NetworkAdapters.Count > 0 ? $"{NetworkAdapters.Count} conexão(ões). Selecione a que deseja investigar. Nenhuma configuração foi alterada." :
+            _selectingNetwork = true;
+            try
+            {
+                SelectedAdapter = NetworkAdapters.FirstOrDefault(a => a.Id == previous)
+                    ?? NetworkAdapters.FirstOrDefault(a => a.Adapter.Status == "Up" && a.Adapter.Gateways.Count > 0) ?? NetworkAdapters.FirstOrDefault();
+            }
+            finally { _selectingNetwork = false; }
+            NetworkReadStatus = NetworkAdapters.Count > 0 ? $"{NetworkAdapters.Count} conexão(ões). A conexão ativa foi selecionada; você pode escolher outra. Nenhuma configuração foi alterada." :
                 "Nenhum adaptador com identificação compatível foi encontrado. " + snapshot.Limitation;
         }
-        catch (Exception ex) { NetworkReadStatus = "Não foi possível detectar conexões: " + ex.Message; throw; }
+        catch (Exception ex)
+        {
+            NetworkAdapters.Clear(); SelectedAdapter = null; NetworkFacts.Clear(); NetworkSettings.Clear();
+            NetworkDriver = "Sem leitura atual do driver.";
+            NetworkReadStatus = "Não foi possível detectar conexões: " + ex.Message; throw;
+        }
     }
     private async Task InspectNetworkAsync()
     {
         if (SelectedAdapter is not { } adapter) return;
+        _lastAutomaticAdapter = adapter.Id;
+        NetworkFacts.Clear(); NetworkSettings.Clear(); SelectedNetworkSetting = null;
+        NetworkDriver = "Consultando o driver…";
         NetworkReadStatus = "Lendo driver, RSS, energia e propriedades do adaptador escolhido…";
         try
         {
@@ -78,7 +130,16 @@ public sealed partial class MainViewModel
                 : AvailabilityLabel(detail.Status) + ": " + string.Join("; ", detail.Limitations);
             Notification = NetworkReadStatus;
         }
-        catch (Exception ex) { NetworkReadStatus = "Falha ao ler este adaptador: " + ex.Message; throw; }
+        catch (Exception ex)
+        {
+            if (SelectedAdapter?.Id == adapter.Id)
+            {
+                NetworkFacts.Clear(); NetworkSettings.Clear(); SelectedNetworkSetting = null;
+                NetworkDriver = "Não foi possível ler o driver desta conexão.";
+                NetworkReadStatus = "Falha ao ler este adaptador: " + ex.Message;
+            }
+            throw;
+        }
     }
     private static string NetworkFactName(string name) => name switch
     {

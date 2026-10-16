@@ -15,6 +15,8 @@
         <SolidColorBrush x:Key="Muted" Color="#A2B0C7"/>
         <SolidColorBrush x:Key="Accent" Color="#78A8FF"/>
         <SolidColorBrush x:Key="Success" Color="#63D6BD"/>
+        <SolidColorBrush x:Key="Attention" Color="#F2C56B"/>
+        <SolidColorBrush x:Key="Problem" Color="#FF9696"/>
         <Style x:Key="KeyboardFocus">
             <Setter Property="Control.Template"><Setter.Value><ControlTemplate><Border BorderBrush="{StaticResource Accent}" BorderThickness="2" CornerRadius="7" Margin="-3"/></ControlTemplate></Setter.Value></Setter>
         </Style>

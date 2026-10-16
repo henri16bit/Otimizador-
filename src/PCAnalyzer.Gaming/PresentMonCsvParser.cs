@@ -43,8 +43,10 @@ public sealed class PresentMonCsvParser
         long read = 0, invalid = 0, filtered = 0;
         var stored = 0;
         var complete = true;
+        var cancelled = false;
+        string? errorDetail = null;
         string? record;
-        while ((record = await records.ReadAsync(cancellationToken).ConfigureAwait(false)) is not null)
+        while ((record = await ReadNextRecordAsync().ConfigureAwait(false)) is not null)
         {
             if (string.IsNullOrWhiteSpace(record)) continue;
             read++;
@@ -121,7 +123,26 @@ public sealed class PresentMonCsvParser
         }
         if (invalid > 100) warnings.Add($"{invalid} registros inválidos no total; detalhes limitados aos primeiros 100 avisos.");
         var output = streams.Select(state => BuildStream(state, schema, complete)).ToArray();
-        return new PresentMonImportResult(output, read, invalid, filtered, complete, warnings);
+        return new PresentMonImportResult(output, read, invalid, filtered, complete, warnings, cancelled, errorDetail);
+
+        async Task<string?> ReadNextRecordAsync()
+        {
+            try { return await records.ReadAsync(cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                complete = false;
+                cancelled = true;
+                warnings.Add("Leitura cancelada: frames anteriores ao cancelamento foram preservados; as estatísticas descrevem somente esse trecho.");
+                return null;
+            }
+            catch (Exception ex) when (stored > 0 && ex is PresentMonFormatException or IOException or UnauthorizedAccessException)
+            {
+                complete = false;
+                errorDetail = ex.Message;
+                warnings.Add("Leitura interrompida; frames válidos anteriores ao erro foram preservados. " + ex.Message);
+                return null;
+            }
+        }
 
         void Warn(string message) { if (warnings.Count < 100) warnings.Add(message); }
         void Reject(string message) { invalid++; Warn($"Registro {read}: {message}"); }

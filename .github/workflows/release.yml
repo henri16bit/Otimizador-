@@ -9,7 +9,7 @@ name: Publish Windows release
       tag:
         description: Existing version tag to publish
         required: true
-        default: v0.3.0-preview.3
+        default: v0.4.0-preview.1
 
 permissions:
   contents: read
@@ -60,6 +60,9 @@ jobs:
         id: ui_flows
         shell: pwsh
         run: ./scripts/test-ui.ps1
+      - name: Verify real Windows CPU, RAM, processes and persistence
+        id: hardware
+        run: dotnet run --project src/PCAnalyzer.Verify/PCAnalyzer.Verify.csproj -c Release --no-build --no-restore -- --output artifacts/windows-verification
       - name: Package self-contained Windows application
         id: package
         shell: pwsh
@@ -94,6 +97,7 @@ jobs:
             artifacts/ui-flow-*.json
             artifacts/ui-flow-*.png
             artifacts/ui-flow-*.txt
+            artifacts/windows-verification/**/validation-result.json
           if-no-files-found: warn
       - name: Record publication result for Git clients
         if: always() && steps.checkout.outcome == 'success'

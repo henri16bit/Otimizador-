@@ -1,6 +1,6 @@
 namespace PCAnalyzer.Core;
 
-public enum TestStatus { NotStarted, Preparing, Running, Completed, Failed, Cancelled }
+public enum TestStatus { NotStarted, Preparing, Running, Completed, Failed, Cancelled, Partial }
 public sealed record RelativePoint(double TimeMilliseconds, double? Value);
 public sealed record RelativeSeries(string Name, string Unit, IReadOnlyList<RelativePoint> Points, string TimeBasis, string Source);
 public sealed record ResultIndicator(string Id, string Name, double? Value, string Unit, string Detail);
@@ -8,7 +8,7 @@ public sealed record TechnicalResult(string Title, IReadOnlyList<string> Lines, 
     IReadOnlyList<RelativeSeries>? Series = null, IReadOnlyList<ResultIndicator>? Indicators = null,
     IReadOnlyList<Finding>? Findings = null, IReadOnlyList<string>? Limitations = null,
     Availability Availability = Availability.Available, bool Cancelled = false, DiagnosticSession? Session = null,
-    string? ComparisonKey = null);
+    string? ComparisonKey = null, DiagnosticReport? Report = null, bool Partial = false);
 public sealed record TestProgress(string Stage, double? Fraction = null, long? CompletedUnits = null,
     string? Detail = null);
 public sealed record TestSession(Guid Id, string TestId, string Name, TestStatus Status, DateTimeOffset StartedAt,
@@ -90,9 +90,9 @@ public sealed class TestExecutionService(ITestHistoryStore history, Action<strin
             var result = await run(progress, cancellation.Token).ConfigureAwait(false);
             var status = result.Cancelled || cancellation.IsCancellationRequested ? TestStatus.Cancelled
                 : result.Availability is Availability.ReadError or Availability.PermissionRequired or Availability.ToolMissing or Availability.Unsupported
-                    ? TestStatus.Failed : TestStatus.Completed;
+                    ? TestStatus.Failed : result.Partial ? TestStatus.Partial : TestStatus.Completed;
             Change(s => s with { Status = status, EndedAt = DateTimeOffset.UtcNow, Result = result,
-                Progress = new(status == TestStatus.Completed ? "Concluído; salvando resultado" : status == TestStatus.Cancelled ? "Cancelado; preservando resultados parciais" : "Falha reportada pela fonte"),
+                Progress = new(status is TestStatus.Completed or TestStatus.Partial ? "Concluído; salvando resultado" : status == TestStatus.Cancelled ? "Cancelado; preservando resultados parciais" : "Falha reportada pela fonte"),
                 Error = status == TestStatus.Failed ? result.Lines.FirstOrDefault() : null });
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
@@ -111,7 +111,7 @@ public sealed class TestExecutionService(ITestHistoryStore history, Action<strin
             try
             {
                 var final = Current! with { Progress = Current!.Progress with { Stage = Current!.Status switch
-                    { TestStatus.Completed => "Resultado salvo no histórico", TestStatus.Cancelled => "Cancelamento registrado no histórico", _ => "Falha registrada no histórico" } } };
+                    { TestStatus.Completed => "Resultado salvo no histórico", TestStatus.Partial => "Análise parcial salva no histórico", TestStatus.Cancelled => "Cancelamento registrado no histórico", _ => "Falha registrada no histórico" } } };
                 await history.SaveTestAsync(final, CancellationToken.None).ConfigureAwait(false);
                 Change(_ => final);
             }

@@ -21,18 +21,43 @@ public static class TestReportExporter
         static string H(string? text) => WebUtility.HtmlEncode(text ?? "");
         var html = new StringBuilder("<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>PC Analyzer — resultado</title><style>body{font:16px system-ui;background:#101827;color:#e2e8f0;max-width:1080px;margin:32px auto;padding:20px}article,details{background:#192337;padding:18px;margin:12px 0;border-radius:8px}td,th{padding:10px;text-align:left;border-bottom:1px solid #334155}pre{white-space:pre-wrap;overflow-wrap:anywhere}h2{color:#93c5fd}</style><h1>");
         html.Append(H(safe.Name)).Append("</h1><p>").Append(H(safe.Status.ToString())).Append(" · ").Append(H(safe.StartedAt.ToString("O"))).Append("</p><p>").Append(H(safe.Error)).Append("</p>");
+        if (safe.Result?.Report is { } report)
+        {
+            html.Append("<h2>Conclusão da análise</h2><article><p>").Append(H(report.Completion switch
+            { DiagnosticCompletion.Completed => "Concluída", DiagnosticCompletion.Partial => "Parcial", DiagnosticCompletion.Failed => "Falhou", _ => "Cancelada" }))
+                .Append("</p><p>").Append(H(report.Summary)).Append("</p></article><h2>Avaliação por componente</h2>");
+            foreach (var component in report.Components)
+            {
+                html.Append("<article><h3>").Append(H(component.Name)).Append(" · ").Append(H(component.State switch
+                { DiagnosticAssessmentState.Normal => "Normal no escopo observado", DiagnosticAssessmentState.Attention => "Atenção", DiagnosticAssessmentState.Problem => "Problema observado", _ => "Inconclusivo" }))
+                    .Append("</h3><p>").Append(H(component.Summary)).Append("</p>");
+                foreach (var evidence in component.Evidence)
+                    html.Append("<p>").Append(H($"{evidence.Description} · {evidence.Value:0.###} {evidence.Unit} · {evidence.Source} · {evidence.Timestamp:O}")).Append("</p>");
+                foreach (var limit in component.Limitations) html.Append("<p>Limitação: ").Append(H(limit)).Append("</p>");
+                html.Append("<p>Próximo passo: ").Append(H(component.NextAction.Label)).Append(" — ").Append(H(component.NextAction.Reason)).Append("</p></article>");
+            }
+            html.Append("<h2>Próximos passos</h2>");
+            foreach (var action in report.Recommendations)
+                html.Append("<p><strong>").Append(H(action.Label)).Append("</strong> · ").Append(H(action.Reason)).Append("</p>");
+            html.Append("<details><summary>Etapas executadas e cobertura</summary>");
+            foreach (var stage in report.Stages)
+                html.Append("<p><strong>").Append(H(stage.Name)).Append("</strong> · ").Append(H(stage.Status.ToString()))
+                    .Append(" · ").Append(H(stage.StartedAt.ToString("O"))).Append(" → ").Append(H(stage.EndedAt.ToString("O")))
+                    .Append("<br>").Append(H(stage.Detail)).Append("</p>");
+            html.Append("</details>");
+        }
         html.Append("<h2>Indicadores</h2><table><tr><th>Métrica</th><th>Valor</th><th>Interpretação</th></tr>");
         foreach (var indicator in safe.Result?.Indicators ?? [])
             html.Append("<tr><td>").Append(H(indicator.Name)).Append("</td><td>").Append(H(indicator.Value?.ToString("0.###") ?? "—")).Append(' ').Append(H(indicator.Unit)).Append("</td><td>").Append(H(indicator.Detail)).Append("</td></tr>");
         html.Append("</table><h2>Evidências e recomendações</h2>");
-        foreach (var finding in safe.Result?.Findings ?? [])
+        foreach (var finding in (safe.Result?.Report?.Findings ?? []).Concat(safe.Result?.Findings ?? []).DistinctBy(f => f.Id))
         {
             html.Append("<article><h3>").Append(H(finding.Title)).Append("</h3><p>").Append(H(finding.Category + " · confiança " + finding.Confidence)).Append("</p><p>").Append(H(finding.Explanation)).Append("</p><p>").Append(H(finding.Recommendation)).Append("</p>");
             foreach (var evidence in finding.Evidence) html.Append("<p>").Append(H($"{evidence.Description} · {evidence.Value:0.###} {evidence.Unit} · {evidence.Source} · {evidence.Timestamp:O}")).Append("</p>");
             html.Append("</article>");
         }
         html.Append("<h2>Limitações</h2>");
-        foreach (var limit in safe.Result?.Limitations ?? []) html.Append("<p>").Append(H(limit)).Append("</p>");
+        foreach (var limit in (safe.Result?.Report?.Limitations ?? []).Concat(safe.Result?.Limitations ?? []).Distinct()) html.Append("<p>").Append(H(limit)).Append("</p>");
         html.Append("<details><summary>Resultado técnico</summary><pre>").Append(H(string.Join("\n", safe.Result?.Lines ?? []))).Append("</pre></details>");
         html.Append("<details><summary>Registro completo, séries e contexto</summary><pre>").Append(H(JsonSerializer.Serialize(safe, Options))).Append("</pre></details></html>");
         return html.ToString();
@@ -59,6 +84,7 @@ public static class TestReportExporter
             {
                 Title = clean(result.Title), Lines = result.Lines.Select(clean).ToArray(), Metrics = metrics.Samples, Findings = metrics.Findings,
                 ComparisonKey = result.ComparisonKey is null ? null : clean(result.ComparisonKey),
+                Report = result.Report is null ? null : ReportPrivacy.RedactReport(result.Report, clean),
                 Session = result.Session is null ? null : safe,
                 Limitations = result.Limitations?.Select(clean).ToArray(),
                 Indicators = result.Indicators?.Select(i => i with { Id = clean(i.Id), Name = clean(i.Name), Unit = clean(i.Unit), Detail = clean(i.Detail) }).ToArray(),

@@ -13,6 +13,8 @@ internal static class Program
 {
     private static readonly string[] EssentialKeys = ["cpu.total.percent", "memory.total.bytes", "memory.available.bytes", "memory.commit.bytes", "memory.commit.limit.bytes"];
     private static readonly TimeSpan Cadence = TimeSpan.FromSeconds(2);
+    private const int MinimumBatches = 3;
+    private const int MaximumBatches = 6;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true,
@@ -24,7 +26,7 @@ internal static class Program
     {
         if (arguments.Any(argument => argument is "--help" or "-h"))
         {
-            Console.WriteLine("PCAnalyzer.Verify [--output DIRETÓRIO]\nValidação manual passiva: inventário, 3 lotes a cada 2 s, SQLite e relatórios anônimos. Sem elevação.");
+            Console.WriteLine("PCAnalyzer.Verify [--output DIRETÓRIO]\nValidação manual passiva: inventário, CPU/RAM/processo próprio, 3 a 6 lotes a cada 2 s, SQLite e relatórios anônimos. Sem elevação.");
             return 0;
         }
         string directory;
@@ -56,24 +58,33 @@ internal static class Program
             var started = DateTimeOffset.UtcNow;
             var inventory = await new WindowsHardwareDiscovery().DiscoverAsync(cancellation.Token);
             var context = new SessionContext("Validação passiva; carga do usuário não controlada", "Leve", Cadence.TotalSeconds,
-                "Três lotes; primeiro estabelece deltas. Esta verificação não valida precisão por instrumento de referência nem WPF, ETW ou PresentMon.");
+                "Três a seis lotes; primeiro estabelece deltas. Os critérios usam os dois últimos lotes após aquecimento limitado. " +
+                "CPU/RAM e processo próprio são obrigatórios; campos de processos protegidos de terceiros não são exigidos. " +
+                "Esta verificação não valida precisão por instrumento de referência nem WPF, ETW ou PresentMon.");
             var session = new DiagnosticSession(Guid.NewGuid(), "Validação Windows explícita", started, null, context, inventory, [], []);
             PrintInventory(ReportPrivacy.Anonymize(session).Inventory);
             phase = "coleta";
             var batches = new List<TelemetryBatch>();
             await using (var collector = new WindowsTelemetryCollector())
             {
-                for (var index = 0; index < 3; index++)
+                for (var index = 0; index < MaximumBatches; index++)
                 {
                     if (index > 0) await Task.Delay(Cadence, cancellation.Token);
                     var batch = await collector.CollectAsync(Cadence, cancellation.Token);
                     batches.Add(batch);
-                    Console.WriteLine($"Lote {index + 1}/3 — timestamp UTC {batch.Timestamp:O}");
+                    Console.WriteLine($"Lote {index + 1}/{MaximumBatches} no máximo — timestamp UTC {batch.Timestamp:O}");
                     foreach (var group in batch.Metrics.GroupBy(metric => metric.Status).OrderBy(group => group.Key))
                         Console.WriteLine($"  {group.Key}: {group.Count()} métricas");
                     foreach (var metric in batch.Metrics.Where(metric => EssentialKeys.Contains(metric.Key) ||
                         metric.Key == "collector.duration.ms" || metric.Key.StartsWith("gpu.", StringComparison.Ordinal)))
                         Console.WriteLine($"  {metric.Key}: {Number(metric.Value)} {metric.Unit} | {metric.Status} | {metric.Source} | intervalo {Number(metric.SamplingInterval.TotalSeconds)} s");
+                    var self = OwnProcess(batch);
+                    Console.WriteLine(self is null ? "  Processo próprio: não retornou uma entrada única neste lote." :
+                        $"  Processo próprio: working set {self.WorkingSetBytes?.ToString(CultureInfo.InvariantCulture) ?? "—"} bytes | CPU {Number(self.CpuPercent)}% | {self.Limitation}");
+                    if (batches.Count < MinimumBatches) continue;
+                    if (Evaluate(batches, inventory, out _).All(check => check.Passed)) break;
+                    if (batches.Count < MaximumBatches)
+                        Console.WriteLine("  Aguardando fontes passivas, dentro do limite de seis lotes; dados ausentes continuam ausentes.");
                 }
             }
 
@@ -108,10 +119,22 @@ internal static class Program
                 throw new InvalidDataException("HTML escrito difere da exportação da sessão salva.");
 
             var pass = checks.All(check => check.Passed);
+            var ownProcessSamples = batches.Select((batch, index) =>
+            {
+                var self = OwnProcess(batch);
+                return new
+                {
+                    batch = index + 1, batch.Timestamp, uniqueOwnPidPresent = self is not null,
+                    self?.WorkingSetBytes, self?.CpuPercent,
+                    limitation = self?.Limitation ?? "O coletor não retornou uma entrada única para o PID próprio."
+                };
+            }).ToArray();
             var result = new
             {
-                schemaVersion = 1, sessionId = session.Id, capturedAtUtc = DateTimeOffset.UtcNow, platform = "Windows",
+                schemaVersion = 2, sessionId = session.Id, capturedAtUtc = DateTimeOffset.UtcNow, platform = "Windows",
                 requiredMetricsAvailable = pass, nvidiaGpuTelemetryRequired = gpuRequired, sampleBatches = batches.Count,
+                evaluatedBatches = batches.Select((_, index) => index + 1).Skip(1).TakeLast(2).ToArray(),
+                maximumBatches = MaximumBatches, ownProcessSamples,
                 savedMetricCount = saved.Samples.Count, exactSqliteRoundTrip = true,
                 jsonNumericAndMetadataPreserved = true, csvMatchesJsonLeaves = true, htmlMatchesSavedSessionExport = true,
                 referenceHardwareAccuracyValidated = false, wpfEtwPresentMonOrOptimizationValidated = false,
@@ -124,7 +147,7 @@ internal static class Program
                 "GPU: nenhuma NVIDIA identificada; critérios de telemetria GPU não validados por esta execução.");
             Console.WriteLine("Relatórios JSON/CSV/HTML anônimos verificados a partir dos dados recarregados. O banco SQLite guarda dados locais completos.");
             Console.WriteLine($"Artefatos: pasta {runName} no diretório " + (arguments.Length == 0 ? @"%LOCALAPPDATA%\PCAnalyzer\validation." : "informado em --output."));
-            Console.WriteLine(pass ? "Verificação passiva concluída; leituras essenciais disponíveis. Precisão por referência e demais critérios Windows continuam pendentes." :
+            Console.WriteLine(pass ? "Verificação passiva concluída; CPU/RAM e processo próprio disponíveis após aquecimento. Precisão por referência e demais critérios Windows continuam pendentes." :
                 "Verificação incompleta: faltaram leituras essenciais. Artefatos preservados com os estados reais.");
             return pass ? 0 : 3;
         }
@@ -139,9 +162,16 @@ internal static class Program
 
     private sealed record Check(string Description, bool Passed);
 
+    private static ProcessSample? OwnProcess(TelemetryBatch batch)
+    {
+        var matching = batch.Processes.Where(process => process.ProcessId == Environment.ProcessId).ToArray();
+        return matching.Length == 1 ? matching[0] : null;
+    }
+
     private static IReadOnlyList<Check> Evaluate(IReadOnlyList<TelemetryBatch> batches, HardwareInventory inventory, out bool gpuRequired)
     {
         var checks = new List<Check>();
+        checks.Add(new("Ao menos três lotes passivos coletados; primeiro reservado para estabelecer deltas", batches.Count >= MinimumBatches));
         var nvmlIds = inventory.Components.Where(component => component.Category == "GPU (NVML)").Select(component => component.Id).Distinct().ToArray();
         var nvidiaWmiCount = inventory.Components.Count(component => component.Category == "GPU" &&
             (component.Name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) || component.Facts.Any(fact =>
@@ -149,8 +179,14 @@ internal static class Program
         gpuRequired = nvidiaWmiCount > 0 || nvmlIds.Length > 0;
         if (gpuRequired)
             checks.Add(new("Dispositivos NVIDIA enumerados pela NVML (sem presumir associação de índices WMI/NVML)", nvmlIds.Length > 0 && nvmlIds.Length >= nvidiaWmiCount));
-        foreach (var (batch, index) in batches.Select((batch, index) => (batch, index)).Skip(1))
+        foreach (var (batch, index) in batches.Select((batch, index) => (batch, index)).Skip(1).TakeLast(2))
         {
+            var self = OwnProcess(batch);
+            checks.Add(new($"Lote {index + 1}: processo próprio com PID único, nome e timestamp do lote", self is not null &&
+                !string.IsNullOrWhiteSpace(self.Name) && self.Name != "PID " + Environment.ProcessId && self.Timestamp == batch.Timestamp));
+            checks.Add(new($"Lote {index + 1}: working set do processo próprio disponível e positivo", self?.WorkingSetBytes is > 0));
+            checks.Add(new($"Lote {index + 1}: CPU do processo próprio disponível e entre 0 e 100% após duas amostras", self?.CpuPercent is { } cpu &&
+                double.IsFinite(cpu) && cpu is >= 0 and <= 100));
             foreach (var key in EssentialKeys) CheckMetric(key, 0, key == "cpu.total.percent" ? 100 : double.MaxValue,
                 requirePositive: key is "memory.total.bytes" or "memory.commit.limit.bytes");
             var total = Value("memory.total.bytes");
