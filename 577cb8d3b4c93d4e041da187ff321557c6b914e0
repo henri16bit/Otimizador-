@@ -1,0 +1,38 @@
+{
+  "tag": "v0.4.0-preview.2",
+  "timestamp": "2026-10-16T23:09:29.0514738+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/38979682218",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "ui_flows": "failure",
+    "hardware": "skipped",
+    "package": "skipped",
+    "smoke": "skipped",
+    "publish": "skipped"
+  },
+  "uiFlows": {
+    "success": false,
+    "error": "System.InvalidOperationException: Requested layout dimensions were not rendered.\r\n   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 161\r\n   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 136\r\n   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass1_0.<<Main>b__0>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 36"
+  },
+  "tests": {
+    "passed": 243,
+    "notExecuted": 0,
+    "total": 243,
+    "failed": 0
+  },
+  "uiFlowstdout": [
+    "test.ping: fixture denied",
+    "fixture action: fixture failure"
+  ],
+  "uiFlowstderr": [
+    "System.InvalidOperationException: Requested layout dimensions were not rendered.",
+    "   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 161",
+    "   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 136",
+    "   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass1_0.<<Main>b__0>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 36"
+  ]
+}
