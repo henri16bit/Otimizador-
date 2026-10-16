@@ -1,0 +1,35 @@
+{
+  "tag": "v0.4.0-preview.1",
+  "timestamp": "2026-10-16T18:23:39.2751565+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/38946723631",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "ui_flows": "failure",
+    "hardware": "skipped",
+    "package": "skipped",
+    "smoke": "skipped",
+    "publish": "skipped"
+  },
+  "uiFlows": {
+    "success": false,
+    "error": "System.InvalidOperationException: Duration must have a readable label.\r\n   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 149\r\n   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 67\r\n   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass1_0.<<Main>b__0>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 36"
+  },
+  "tests": {
+    "total": 242,
+    "passed": 242,
+    "failed": 0,
+    "notExecuted": 0
+  },
+  "uiFlowstdout": [],
+  "uiFlowstderr": [
+    "System.InvalidOperationException: Duration must have a readable label.",
+    "   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 149",
+    "   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 67",
+    "   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass1_0.<<Main>b__0>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 36"
+  ]
+}
