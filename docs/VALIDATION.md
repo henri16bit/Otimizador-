@@ -1,4 +1,20 @@
-# Validação executada — revisão de 15/10/2026
+# Validação executada
+
+## Análise coordenada — 16/10/2026
+
+Versão **v0.4.0-preview.3**, código `5626928abe795ca0a7ff4f00295130fe3caba48c`: [execução Windows aprovada](https://github.com/henri16bit/Otimizador-/actions/runs/38980121940) e [ZIP publicado](https://github.com/henri16bit/Otimizador-/releases/tag/v0.4.0-preview.3).
+
+- Reconstrução Release com avisos tratados como erros; **243 testes C# aprovados**, nenhum falhou ou foi ignorado. Suíte também executada no Linux (`artifacts/test-results/review-analysis.trx`). Cinco testes Python de empacotamento e cinco cenários PowerShell de publicação aprovados.
+- **22 cenários WPF** aprovados: coleta antes do inventário, menu simples, progresso/navegação, cancelamento/falha, relatório por componente, GPU ausente inconclusiva, persistência/reabertura, rede automática, limpeza de resultado antigo, importações isoladas, última tentativa falha visível e observação selecionada preservada. Nenhum erro de binding foi registrado. As fronteiras de hardware desses cenários usam fixtures explícitas.
+- Layout WPF medido, organizado e renderizado fora da tela em **1366×768 e 1920×1080**, preservando recursos e bindings da janela. A área de trabalho do runner limita o HWND; essas capturas não equivalem a teste em dois monitores ou DPI diferentes. A janela real foi validada no tamanho disponível e no tamanho compacto.
+- **Verificação passiva real no runner Windows:** três lotes, CPU/RAM/commit e processo próprio válidos nos dois últimos; 361 métricas persistidas. SQLite recarregado sem diferenças, JSON preservando valores/metadados, CSV equivalente ao JSON e HTML equivalente à sessão salva. Nenhuma NVIDIA foi identificada: GPU não foi validada por esse teste.
+- Pacote autossuficiente aberto: **10 páginas e 7 abas internas**, tamanho compacto, saída zero. ZIP e SHA256 confirmados no GitHub; ZIP de 148.587.058 bytes, SHA256 `ac3d436b58d3ca96c66dbd283b4dad1c13ed0a90545113d7461a388bffa13bea`.
+
+As tentativas `v0.4.0-preview.1` e `.2` não publicaram binários: a primeira detectou seleção de duração ainda não renderizada; a segunda revelou o limite da área de trabalho do runner. O seletor recebeu rótulo direto e espera pelo ciclo visual; a validação das resoluções passou a usar dimensões reais do layout WPF fora da tela. As asserções permaneceram ativas.
+
+Ainda dependem do PC alvo: Windows 10 Pro 22H2, NVML/GPU Engine e precisão dos sensores, UAC/ETW real, PresentMon em jogo, overhead, escalas DPI e aplicação/restauração no driver de rede. O teste do runner não certifica saúde física nem ganhos de desempenho. Veja as fases e arquivos em [DIAGNOSTIC-REFACTOR-AUDIT.md](DIAGNOSTIC-REFACTOR-AUDIT.md).
+
+## Registro anterior — 15/10/2026
 
 Ambiente: Debian 13 x64, SDK .NET 10.0.402 (runtime 10.0.13). O SDK foi baixado de `builds.dotnet.microsoft.com` e verificado por SHA-512 contra o manifesto oficial. Pacotes NuGet restaurados com verificação normal de TLS/assinaturas; versões e hashes estão nos lockfiles.
 
