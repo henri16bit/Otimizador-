@@ -163,8 +163,15 @@ public sealed partial class MainViewModel
         OpenFindingCommand = new RelayCommand(parameter =>
         {
             if (parameter is not Finding finding) return;
+            if (!TestFindings.Contains(finding))
+            {
+                ClearOpenedResult();
+                Replace(TestFindings, [finding]);
+                OperationTitle = finding.Title;
+                OperationText = finding.Explanation;
+            }
             _findingFromResult = true;
-            SelectedFinding = finding; ResultTab = 0; Navigate("resultados");
+            SelectedFinding = finding; ShowTechnicalDetails = true; ResultTab = 0; Navigate("resultados");
         });
         InvestigateFindingCommand = new RelayCommand(() =>
         {
@@ -293,14 +300,15 @@ public sealed partial class MainViewModel
     }
     private void DisplayTestResult(TestSession run)
     {
-        if (_findingFromResult) SelectedFinding = null;
-        _findingFromResult = false;
+        SelectedFinding = null;
+        _findingFromResult = true;
         _openedTest = run;
         OperationTitle = run.Result?.Title ?? run.Name;
         OperationText = string.Join(Environment.NewLine, (run.Result?.Lines ?? []).Concat(run.Error is null ? [] : new[] { run.Error }));
         Replace(ResultSeries, run.Result?.Series ?? []); SelectedRelativeSeries = ResultSeries.FirstOrDefault();
         Replace(ResultIndicators, (run.Result?.Indicators ?? []).Select(i => new IndicatorRow(i)));
         Replace(TestFindings, run.Result?.Findings ?? []);
+        SelectedFinding = TestFindings.FirstOrDefault();
         Replace(ResultLimitations, run.Result?.Limitations ?? ["Não há resultado de medição completo nesta execução."]);
         RefreshSimpleReport(run.Result);
         UpdateLastDiagnostic(run);
@@ -309,8 +317,8 @@ public sealed partial class MainViewModel
     private void ClearOpenedResult()
     {
         _openedTest = null;
-        if (_findingFromResult) SelectedFinding = null;
-        _findingFromResult = false;
+        SelectedFinding = null;
+        _findingFromResult = true;
         Replace(ResultIndicators, []); Replace(TestFindings, []); Replace(ResultLimitations, []);
         Replace(ResultSeries, []); SelectedRelativeSeries = null;
         RefreshSimpleReport(null);
@@ -333,7 +341,7 @@ public sealed partial class MainViewModel
         {
             var analysis = _displayedExecution?.Id == candidate.Id ? _displayedExecution
                 : await _backend.LoadTestAsync(candidate.Id, _lifetime.Token);
-            if (analysis?.Result?.Report is null) continue;
+            if (analysis is null) continue;
             UpdateLastDiagnostic(analysis);
             break;
         }

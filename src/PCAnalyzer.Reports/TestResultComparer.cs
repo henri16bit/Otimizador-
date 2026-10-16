@@ -8,8 +8,10 @@ public static class TestResultComparer
     {
         var lines = new List<string> { "Diferenças descritivas. Uma alteração aplicada não comprova melhoria.",
             $"Antes: {before.Name} · {before.StartedAt:O}", $"Depois: {after.Name} · {after.StartedAt:O}" };
-        if (before.TestId != after.TestId || before.Status != TestStatus.Completed || after.Status != TestStatus.Completed)
+        if (before.TestId != after.TestId || before.Status is not (TestStatus.Completed or TestStatus.Partial) || after.Status is not (TestStatus.Completed or TestStatus.Partial))
             return new("Testes não comparáveis", lines.Concat(["Escolha duas execuções finalizadas do mesmo diagnóstico. Falhas e cancelamentos não produzem uma comparação de desempenho."]).ToArray(), Availability: Availability.InsufficientData);
+        if (before.Status == TestStatus.Partial || after.Status == TestStatus.Partial)
+            lines.Add("Há análise parcial: somente medições válidas presentes nas duas sessões serão comparadas. As fontes ausentes e as conclusões gerais continuam inconclusivas.");
         if (before.Result?.Session is not { } a || after.Result?.Session is not { } b)
             return new("Falta contexto para comparar", lines.Concat(["Uma execução não contém inventário e contexto da coleta."]).ToArray(), Availability: Availability.InsufficientData);
         if (string.IsNullOrEmpty(before.Result.ComparisonKey) || before.Result.ComparisonKey != after.Result.ComparisonKey)

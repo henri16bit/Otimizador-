@@ -100,13 +100,15 @@ public sealed partial class ApplicationBackend
                 return new("Conexão identificada", [selected is null ? "Nenhuma conexão ativa utilizável." : selected.Name + " · " + selected.Description],
                     Availability: selected is null && initial.Snapshot.Status == Availability.Available
                         ? Availability.InsufficientData : initial.Snapshot.Status,
-                    Limitations: initial.Snapshot.Limitation is { } reason ? [reason] : []);
+                    Limitations: initial.Snapshot.Limitation is { } reason ? [reason] : [],
+                    ComparisonKey: "network:" + selected?.InterfaceGuid);
             }
             var after = await backend.DiscoverNetworkAsync(ct);
             var findings = NetworkDiagnosticAnalyzer.Analyze(initial.Snapshot, after, _details,
                 options.AdapterId ?? initial.Adapter?.InterfaceGuid);
             return new("Análise da conexão", findings.Select(f => f.Explanation).ToArray(), Findings: findings,
-                Limitations: _details.SelectMany(d => d.Limitations).ToArray(), Availability: after.Status);
+                Limitations: _details.SelectMany(d => d.Limitations).ToArray(), Availability: after.Status,
+                ComparisonKey: "network:" + initial.Adapter?.InterfaceGuid);
         }
         public async Task<TechnicalResult> PingAsync(DiagnosticOptions options, IProgress<TestProgress> progress, CancellationToken ct)
         {

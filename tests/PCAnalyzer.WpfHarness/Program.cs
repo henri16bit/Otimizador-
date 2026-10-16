@@ -38,7 +38,7 @@ internal static class Program
                 Directory.CreateDirectory("artifacts");
                 await File.WriteAllTextAsync("artifacts/ui-flow-result.json", JsonSerializer.Serialize(new { success = true,
                     checks = new[] { "readable selection labels", "interrupted execution recovery", "dashboard progress", "navigation during run", "no forced navigation", "cancel", "failure", "reopen stored result", "network read and unavailable property", "missing sensors",
-                        "collection before inventory", "six simple navigation entries", "structured general report", "missing GPU is inconclusive", "report history reopen", "failure clears old report", "imports do not change live readings", "no WPF binding errors", "1366 and 1920 layout rendering", "gaming opt-in commands" },
+                        "collection before inventory", "six simple navigation entries", "structured general report", "missing GPU is inconclusive", "report history reopen", "failure clears old report", "imports do not change live readings", "no WPF binding errors", "1366 and 1920 layout rendering", "gaming opt-in commands", "failed analysis remains latest attempt", "selected finding remains in its module" },
                     fixtureDataOnly = true, hardwareOrConfigurationChanged = false }));
                 _exitCode = 0;
             }
@@ -63,8 +63,11 @@ internal static class Program
         Require(vm.VisibleSections.Select(s => s.Id).SequenceEqual(new[] { "dashboard", "analisar", "resultados", "ajustes", "avancado", "config" }), "Simple navigation differs from the six intended destinations.");
         vm.NavigateCommand.Execute("analisar");
         window.UpdateLayout();
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        window.UpdateLayout();
         var durationSelector = Descendants<ComboBox>(window).Single(c => ReferenceEquals(c.ItemsSource, vm.ObservationDurations));
-        Require(Descendants<TextBlock>(durationSelector).Any(t => t.Text.Contains("30")), "Duration must have a readable label.");
+        new StartupDiagnostics(["--smoke-test", "--smoke-output", "artifacts/ui-flow-screenshot.json"]).CaptureView((FrameworkElement)window.Content, "analysis-fixture");
+        Require(Descendants<TextBlock>(durationSelector).Any(t => t.Text.Contains("30 segundos")), "Duration must have a readable label. Selected=" + durationSelector.SelectedItem + "; rendered=" + string.Join("|", Descendants<TextBlock>(durationSelector).Select(t => t.Text)));
         Require(vm.AnalyzePcCommand.CanExecute(null) && vm.AnalyzeGamesCommand.CanExecute(null) && !vm.IncludeLatency && !vm.IncludePing,
             "Guided commands must be available and optional active probes disabled by default.");
         vm.NavigateCommand.Execute("dashboard");
@@ -133,6 +136,15 @@ internal static class Program
             Require(window.ActualWidth >= size.Item1 - 1 && window.ActualHeight >= size.Item2 - 1, "Requested layout dimensions were not rendered.");
             diagnostics.CaptureView((FrameworkElement)window.Content, "dashboard-" + size.Item1);
         }
+        await RunFixture(vm, "general", (_, _) => Task.FromException<TechnicalResult>(new IOException("Fixture general failed before report")));
+        Require(vm.HasDiagnostic && vm.LastDiagnosticState == "Falhou" && vm.LastDiagnosticSummary.Contains("Fixture general failed")
+            && vm.PriorityRecommendations.Count == 0, "Latest failed analysis was hidden by an older report.");
+        var finding = new Finding("fixture.network", "Rede", "Fixture network finding", "Fixture only", FindingCategory.InsufficientData,
+            Severity.Information, Confidence.Low, [], "Repeat fixture", "Fixture", "No changes");
+        vm.OpenFindingCommand.Execute(finding);
+        typeof(MainViewModel).GetMethod("AnalyzeDisplay", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(vm, null);
+        Require(vm.SelectedFinding == finding && vm.ShowTechnicalDetails && vm.TestFindings.Count == 1 && vm.TestFindings[0].Component == "Rede",
+            "Passive refresh replaced the selected finding or mixed modules.");
     }
     private static Task RunFixture(MainViewModel vm, string id, Func<IProgress<TestProgress>, CancellationToken, Task<TechnicalResult>> run)
     {

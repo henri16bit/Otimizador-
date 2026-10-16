@@ -202,7 +202,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public bool IsMinimized { get => _minimized; set => _minimized = value; }
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string OperationText { get => _operationText; private set => Set(ref _operationText, value); }
-    public string OperationTitle { get => _operationTitle; private set => Set(ref _operationTitle, value); }
+    public string OperationTitle { get => _operationTitle; private set { if (Set(ref _operationTitle, value)) Notify(nameof(SimpleReportTitle)); } }
     public string ViewContext => _loadedSession is { } saved ? $"HISTÓRICO: {saved.Label} · {saved.StartedAt.LocalDateTime:g}" : $"{CollectionStateLabel} · {_mode} · intervalo alvo {IntervalSeconds:0.##} s";
     public string BufferInfo { get { lock (_sampleLock) return $"{_samples.Count:N0} / {SessionSampleLimit:N0} amostras · {_droppedSamples:N0} descartadas · gráfico: últimas 600"; } }
     public string PauseCaption => _paused ? "Retomar coleta" : "Pausar coleta";
@@ -275,6 +275,11 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void Navigate(string id)
     {
+        if (id == "observacoes")
+        {
+            ClearOpenedResult(); Replace(TestFindings, Findings);
+            SelectedFinding = TestFindings.FirstOrDefault(); OperationTitle = "Observações da coleta passiva";
+        }
         if (id is "fontes" or "observacoes") { ShowTechnicalDetails = true; ResultTab = id == "fontes" ? 2 : 0; id = "resultados"; }
         SelectedSection = Sections.FirstOrDefault(s => s.Id == id) ?? Sections[0];
     }

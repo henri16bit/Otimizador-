@@ -154,11 +154,13 @@ public sealed class DiagnosticOrchestrator(IDiagnosticProbe probe)
             new(options.Workload, "Diagnóstico coordenado", 1,
                 $"Observação solicitada: {options.ObservationSeconds} s; ICMP: {options.IncludePing}; ETW: {options.IncludeLatency}; frames: {options.Gaming}."),
             inventory, samples.ToArray(), report.Findings, Processes: processes.ToArray());
+        var sourceIdentity = string.Join("|", pieces.Select(p => p.ComparisonKey).Where(k => !string.IsNullOrEmpty(k))
+            .Distinct().OrderBy(k => k, StringComparer.Ordinal));
         return new(title, new[] { report.Summary }.Concat(stages.Select(s => $"{s.Name}: {s.Detail}")).ToArray(),
             samples, pieces.SelectMany(p => p.Series ?? []).ToArray(), pieces.SelectMany(p => p.Indicators ?? []).ToArray(),
             report.Findings, report.Limitations,
             report.Completion == DiagnosticCompletion.Failed ? Availability.ReadError : Availability.Available,
-            cancelled, session, $"analysis:v1:{options.ObservationSeconds}:{options.IncludePing}:{options.IncludeLatency}:{options.Gaming}:{options.PingTarget}:{options.AdapterId}:{options.ProcessId}:{options.WaitForProcessName}",
+            cancelled, session, $"analysis:v2:{options.ObservationSeconds}:{options.IncludePing}:{options.IncludeLatency}:{options.Gaming}:{options.PingTarget}:{options.AdapterId}:{options.ProcessId}:{options.WaitForProcessName}:{sourceIdentity}",
             report, report.Completion == DiagnosticCompletion.Partial);
     }
 }

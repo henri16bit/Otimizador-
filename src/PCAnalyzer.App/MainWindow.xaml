@@ -350,7 +350,7 @@
                         <TabItem Header="Observações">
                             <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16,20,16,16">
                                 <TextBlock Text="Selecione uma observação para consultar sua explicação e as leituras que a sustentam." Style="{StaticResource Note}"/>
-                                <ListBox ItemsSource="{Binding Findings}" SelectedItem="{Binding SelectedFinding}" MaxHeight="210"><ListBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Component}" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,5,0,0"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+                                <ListBox ItemsSource="{Binding TestFindings}" SelectedItem="{Binding SelectedFinding}" MaxHeight="210"><ListBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Component}" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,5,0,0"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
                                 <Border Style="{StaticResource Card}" Margin="0,16,0,16"><StackPanel>
                                     <TextBlock Text="{Binding SelectedFinding.Title, TargetNullValue=Aguardando dados para a análise, FallbackValue=Aguardando dados para a análise}" Style="{StaticResource SectionTitle}" TextWrapping="Wrap"/>
                                     <TextBlock Text="{Binding SelectedFindingCategory}" Foreground="{StaticResource Accent}" Margin="0,0,0,12"/>
@@ -490,7 +490,7 @@
                             <TextBlock Text="Análise do computador" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="Reúna CPU, memória, discos e rede em um resultado explicado. Use o PC como no momento do problema." Style="{StaticResource Note}"/>
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <StackPanel><TextBlock Text="Observar por" FontWeight="SemiBold" Margin="0,0,0,6"/><ComboBox ItemsSource="{Binding ObservationDurations}" SelectedItem="{Binding ObservationSeconds}" AutomationProperties.Name="Duração da análise"><ComboBox.ItemTemplate><DataTemplate><TextBlock><Run Text="{Binding Mode=OneWay}"/><Run Text=" segundos"/></TextBlock></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel>
+                                <StackPanel><TextBlock Text="Observar por" FontWeight="SemiBold" Margin="0,0,0,6"/><ComboBox ItemsSource="{Binding ObservationDurations}" SelectedItem="{Binding ObservationSeconds}" AutomationProperties.Name="Duração da análise"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0} segundos}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel>
                                 <StackPanel Grid.Column="2"><TextBlock Text="O que você está fazendo?" FontWeight="SemiBold" Margin="0,0,0,6"/><TextBox Text="{Binding Workload, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Condição da análise" ToolTip="Exemplo: repouso, jogo aberto, copiando arquivos."/></StackPanel>
                             </Grid>
                             <TextBlock Text="Incluir nesta análise" FontWeight="SemiBold" Margin="0,4,0,10"/>

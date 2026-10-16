@@ -12,6 +12,7 @@ public sealed class DiagnosticOrchestratorTests
         var result = await Run(probe, new(ObservationSeconds: 1), _ => published++);
         Assert.Equal(0, probe.Pings + probe.Latency + probe.Frames);
         Assert.Equal(2, probe.NetworkReads);
+        Assert.Contains("network:fixture-adapter", result.ComparisonKey);
         Assert.True(published > 0);
         Assert.NotNull(result.Session);
         Assert.NotEmpty(result.Session.Processes!);
@@ -93,7 +94,7 @@ public sealed class DiagnosticOrchestratorTests
                 [new(123, "fixture process", 1, 1024, now)]));
         }
         public Task<TechnicalResult> ReadNetworkAsync(DiagnosticOptions options, bool final, CancellationToken ct)
-        { NetworkReads++; return Task.FromResult(new TechnicalResult("Network fixture", ["Fixture only"], Availability: Availability.InsufficientData)); }
+        { NetworkReads++; return Task.FromResult(new TechnicalResult("Network fixture", ["Fixture only"], Availability: Availability.InsufficientData, ComparisonKey: "network:fixture-adapter")); }
         public Task<TechnicalResult> PingAsync(DiagnosticOptions options, IProgress<TestProgress> progress, CancellationToken ct)
         { Pings++; return Task.FromResult(new TechnicalResult("Ping fixture", ["Fixture only"])); }
         public Task<TechnicalResult> CaptureLatencyAsync(CancellationToken ct)

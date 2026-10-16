@@ -67,10 +67,12 @@ public sealed partial class MainViewModel
     public string SimpleReportTitle => HasSimpleReport ? "O que a análise encontrou" : OperationTitle;
     public string SimpleReportSummary => _simpleReport?.Summary ?? "Abra uma análise do histórico ou inicie uma nova. Os resultados de ferramentas específicas ficam nos detalhes abaixo.";
     public string SimpleReportState => _simpleReport is { } report ? CompletionLabel(report.Completion) : "Resultado da ferramenta selecionada";
-    public bool HasDiagnostic => _lastDiagnostic?.Result?.Report is not null;
-    public string LastDiagnosticSummary => _lastDiagnostic?.Result?.Report?.Summary ?? "Faça uma análise para conhecer as medições, os limites e os próximos passos.";
+    public bool HasDiagnostic => _lastDiagnostic is not null;
+    public string LastDiagnosticSummary => _lastDiagnostic?.Result?.Report?.Summary ?? _lastDiagnostic?.Error ?? _lastDiagnostic?.Result?.Title
+        ?? "Faça uma análise para conhecer as medições, os limites e os próximos passos.";
     public string LastDiagnosticDate => _lastDiagnostic?.StartedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm") ?? "Nenhuma análise realizada";
-    public string LastDiagnosticState => _lastDiagnostic?.Result?.Report is { } report ? CompletionLabel(report.Completion) : "Pronto para começar";
+    public string LastDiagnosticState => _lastDiagnostic?.Result?.Report is { } report ? CompletionLabel(report.Completion) :
+        _lastDiagnostic is { } run ? TestLabels.Status(run.Status) : "Pronto para começar";
     public string LastDiagnosticCounts => _lastDiagnostic?.Result?.Report is { } report
         ? $"{report.Components.Count(c => c.State == DiagnosticAssessmentState.Problem)} problemas · {report.Components.Count(c => c.State == DiagnosticAssessmentState.Attention)} atenções · {report.Components.Count(c => c.State == DiagnosticAssessmentState.Inconclusive)} inconclusivos" : "";
     public string ProcessEmptyMessage => IsHistoryView ? "Esta sessão não contém processos registrados." :
@@ -185,9 +187,9 @@ public sealed partial class MainViewModel
         new RecommendationRow(report.Components.FirstOrDefault(c => c.NextAction == action)?.Name ?? "Próximo passo", action.Reason, action.Label, action)) ?? [];
     private void UpdateLastDiagnostic(TestSession run)
     {
-        if (run.Result?.Report is null || _lastDiagnostic is { } previous && previous.StartedAt > run.StartedAt) return;
+        if (run.TestId is not ("general" or "gaming-analysis") || _lastDiagnostic is { } previous && previous.StartedAt > run.StartedAt) return;
         _lastDiagnostic = run;
-        Replace(PriorityRecommendations, Recommendations(run.Result.Report).Take(3));
+        Replace(PriorityRecommendations, Recommendations(run.Result?.Report).Take(3));
         foreach (var name in new[] { nameof(HasDiagnostic), nameof(LastDiagnosticSummary), nameof(LastDiagnosticDate), nameof(LastDiagnosticState), nameof(LastDiagnosticCounts) }) Notify(name);
         OpenLastDiagnosticCommand?.Refresh();
     }

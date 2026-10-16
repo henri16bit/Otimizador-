@@ -94,6 +94,18 @@ public sealed class DiagnosticIntegrationTests
         Assert.Equal(Availability.InsufficientData, TestResultComparer.Compare(before, before with { Result = result with { ComparisonKey = null } }).Availability);
         Assert.Contains(TestResultComparer.Compare(before, before).Lines, line => line.StartsWith("RTT:"));
     }
+    [Fact]
+    public void PartialAnalysesCompareAvailableMeasurementsWithAnExplicitCoverageWarning()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var context = new DiagnosticSession(Guid.NewGuid(), "fixture", now, now, new("idle", "normal", 1), new(now, [], []), [], []);
+        var result = new TechnicalResult("analysis", [], Indicators: [new("rtt", "RTT", 10, "ms", "fixture")], Session: context, ComparisonKey: "same-method", Partial: true);
+        var run = new TestSession(Guid.NewGuid(), "general", "General", TestStatus.Partial, now, now, new("end"), result);
+        var comparison = TestResultComparer.Compare(run, run);
+        Assert.Contains(comparison.Lines, line => line.Contains("Há análise parcial"));
+        Assert.Contains(comparison.Lines, line => line.StartsWith("RTT:"));
+        Assert.Equal(Availability.InsufficientData, TestResultComparer.Compare(run, run with { Status = TestStatus.Failed }).Availability);
+    }
     private static NetworkAdapter Adapter(string gateway) => new(Guid.NewGuid(), "Ethernet", "fixture", "Ethernet", "Up", 1_000_000_000,
         [], [gateway], 0, 0, 0, 0);
 }
