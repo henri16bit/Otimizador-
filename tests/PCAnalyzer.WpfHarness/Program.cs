@@ -38,7 +38,7 @@ internal static class Program
                 Directory.CreateDirectory("artifacts");
                 await File.WriteAllTextAsync("artifacts/ui-flow-result.json", JsonSerializer.Serialize(new { success = true,
                     checks = new[] { "readable selection labels", "interrupted execution recovery", "dashboard progress", "navigation during run", "no forced navigation", "cancel", "failure", "reopen stored result", "network read and unavailable property", "missing sensors",
-                        "collection before inventory", "six simple navigation entries", "structured general report", "missing GPU is inconclusive", "report history reopen", "failure clears old report", "imports do not change live readings", "no WPF binding errors", "1366 and 1920 layout rendering", "gaming opt-in commands", "failed analysis remains latest attempt", "selected finding remains in its module" },
+                        "collection before inventory", "six simple navigation entries", "structured general report", "missing GPU is inconclusive", "report history reopen", "failure clears old report", "imports do not change live readings", "no WPF binding errors", "offscreen WPF layouts at 1366x768 and 1920x1080", "gaming opt-in commands", "failed analysis remains latest attempt", "selected finding remains in its module" },
                     fixtureDataOnly = true, hardwareOrConfigurationChanged = false }));
                 _exitCode = 0;
             }
@@ -129,13 +129,19 @@ internal static class Program
         Require(!latest.ContainsKey("frames.fixture.ms") && !vm.HasSimpleReport, "Imported capture polluted current telemetry or retained the prior report.");
         vm.NavigateCommand.Execute("dashboard"); window.UpdateLayout();
         diagnostics.CaptureView((FrameworkElement)window.Content, "dashboard-fixture");
-        foreach (var size in new[] { (1366d, 768d), (1920d, 1080d) })
+        var content = (FrameworkElement)window.Content;
+        foreach (var size in new[] { new Size(1366, 768), new Size(1920, 1080) })
         {
-            window.Width = size.Item1; window.Height = size.Item2; window.UpdateLayout();
-            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-            Require(window.ActualWidth >= size.Item1 - 1 && window.ActualHeight >= size.Item2 - 1, "Requested layout dimensions were not rendered.");
-            diagnostics.CaptureView((FrameworkElement)window.Content, "dashboard-" + size.Item1);
+            // A hosted runner's desktop can cap HWND size. Exercise WPF measure/arrange at
+            // exact virtual viewports while preserving the Window ancestry and bindings.
+            content.Width = size.Width; content.Height = size.Height;
+            content.Measure(size); content.Arrange(new Rect(new Point(), size));
+            Require(Math.Abs(content.ActualWidth - size.Width) < 1 && Math.Abs(content.ActualHeight - size.Height) < 1,
+                $"WPF viewport did not render {size}: actual {content.ActualWidth}x{content.ActualHeight}.");
+            diagnostics.CaptureView(content, "dashboard-" + size.Width);
         }
+        content.Width = double.NaN; content.Height = double.NaN;
+        window.InvalidateMeasure(); window.UpdateLayout();
         await RunFixture(vm, "general", (_, _) => Task.FromException<TechnicalResult>(new IOException("Fixture general failed before report")));
         Require(vm.HasDiagnostic && vm.LastDiagnosticState == "Falhou" && vm.LastDiagnosticSummary.Contains("Fixture general failed")
             && vm.PriorityRecommendations.Count == 0, "Latest failed analysis was hidden by an older report.");

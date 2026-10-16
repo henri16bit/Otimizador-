@@ -68,7 +68,7 @@ public sealed partial class MainViewModel
     public string SimpleReportSummary => _simpleReport?.Summary ?? "Abra uma análise do histórico ou inicie uma nova. Os resultados de ferramentas específicas ficam nos detalhes abaixo.";
     public string SimpleReportState => _simpleReport is { } report ? CompletionLabel(report.Completion) : "Resultado da ferramenta selecionada";
     public bool HasDiagnostic => _lastDiagnostic is not null;
-    public string LastDiagnosticSummary => _lastDiagnostic?.Result?.Report?.Summary ?? _lastDiagnostic?.Error ?? _lastDiagnostic?.Result?.Title
+    public string LastDiagnosticSummary => _lastDiagnostic?.Result?.Report is { } report ? ReportHeadline(report) : _lastDiagnostic?.Error ?? _lastDiagnostic?.Result?.Title
         ?? "Faça uma análise para conhecer as medições, os limites e os próximos passos.";
     public string LastDiagnosticDate => _lastDiagnostic?.StartedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm") ?? "Nenhuma análise realizada";
     public string LastDiagnosticState => _lastDiagnostic?.Result?.Report is { } report ? CompletionLabel(report.Completion) :
@@ -195,6 +195,12 @@ public sealed partial class MainViewModel
     }
     private static string CompletionLabel(DiagnosticCompletion completion) => completion switch
     { DiagnosticCompletion.Completed => "Análise concluída", DiagnosticCompletion.Partial => "Análise parcial · veja as limitações", DiagnosticCompletion.Cancelled => "Cancelada · dados disponíveis preservados", _ => "Não foi possível concluir a análise" };
+    private static string ReportHeadline(DiagnosticReport report)
+    {
+        var main = report.Components.Where(c => c.State is DiagnosticAssessmentState.Problem or DiagnosticAssessmentState.Attention)
+            .OrderByDescending(c => c.State == DiagnosticAssessmentState.Problem).FirstOrDefault();
+        return main is null ? report.Summary : main.Name + ": " + main.Summary;
+    }
     private void RefreshTelemetryHealth()
     {
         var health = _health.Evaluate(_latest.Values.ToArray(), _liveProcesses, DateTimeOffset.UtcNow,
