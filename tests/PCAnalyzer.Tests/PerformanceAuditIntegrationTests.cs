@@ -76,7 +76,12 @@ public sealed class PerformanceAuditIntegrationTests
             var legacy = JsonSerializer.Deserialize<TechnicalResult>("{\"Title\":\"old\",\"Lines\":[]}");
             Assert.Null(legacy!.Audit);
         }
-        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+        finally
+        {
+            // Pooled SQLite handles keep the fixture database open on Windows after Dispose.
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
     }
 
     [Fact]
