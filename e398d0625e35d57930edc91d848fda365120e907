@@ -1,0 +1,49 @@
+{
+  "tag": "v0.5.0-preview.2",
+  "timestamp": "2026-10-18T16:05:45.5079253+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/39143236357",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "previous_tests": "success",
+    "release_tests": "success",
+    "network_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "ui_flows": "failure",
+    "hardware": "skipped",
+    "package": "skipped",
+    "smoke": "skipped",
+    "publish": "skipped"
+  },
+  "uiFlows": {
+    "success": false,
+    "error": "System.InvalidOperationException: Cancelled audit must retain only evidence returned by the current execution and show its cancelled state.\r\n   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 234\r\n   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 206\r\n   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass1_0.<<Main>b__0>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 36"
+  },
+  "tests": {
+    "notExecuted": 0,
+    "failed": 0,
+    "passed": 351,
+    "total": 351
+  },
+  "failedTests": [],
+  "previousFailedTests": [
+    {
+      "stack": "   at System.IO.FileSystem.RemoveDirectoryRecursive(String fullPath, WIN32_FIND_DATA& findData, Boolean topLevel)\r\n   at System.IO.FileSystem.RemoveDirectory(String fullPath, Boolean recursive)\r\n   at PCAnalyzer.Tests.PerformanceAuditIntegrationTests.AuditRoundTripsThroughSqliteAndOldResultsRemainReadable() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.Tests\\PerformanceAuditIntegrationTests.cs:line 79\r\n   at PCAnalyzer.Tests.PerformanceAuditIntegrationTests.AuditRoundTripsThroughSqliteAndOldResultsRemainReadable()\r\n--- End of stack trace from previous location ---",
+      "name": "PCAnalyzer.Tests.PerformanceAuditIntegrationTests.AuditRoundTripsThroughSqliteAndOldResultsRemainReadable",
+      "message": "System.IO.IOException : The process cannot access the file 'history.db' because it is being used by another process."
+    }
+  ],
+  "uiFlowstdout": [
+    "test.ping: fixture denied",
+    "fixture action: fixture failure",
+    "test.general: Fixture general failed before report"
+  ],
+  "uiFlowstderr": [
+    "System.InvalidOperationException: Cancelled audit must retain only evidence returned by the current execution and show its cancelled state.",
+    "   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 234",
+    "   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 206",
+    "   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass1_0.<<Main>b__0>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 36"
+  ]
+}
