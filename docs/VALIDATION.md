@@ -6,7 +6,25 @@ Validação local da nova versão: restore com lockfiles; reconstrução complet
 
 A suíte inclui bloqueio de APIs e verbos privilegiados de escrita; tipos/representações de Registro; MMCSS/IFEO; máscaras/topologia/ABI; DRS/herança; identidade de rede/discos; dados ausentes; snapshots SQLite e anonimização; comparação de campos técnicos e identidade física/processos; cancelamento coerente entre resultado e relatório; teste manual de memória. Alteração apenas de PID não associa processos distintos: criação e executável devem coincidir.
 
-O workflow exige **31 cenários WPF**, abertura do pacote e verificação Windows real antes de publicar. O verificador acrescenta consultas dos provedores, confronto independente do Registro 32/64 bits, prioridade/afinidade do processo próprio, contagem nativa de processadores e persistência/exportação exata de auditoria. A evidência desta execução será registrada no Git para o commit da release. Os resultados anteriores abaixo são históricos, não validação dessas novas funções.
+Versão **v0.5.0-preview.3**, código `91d389c733898a5cd36785598e6c68fad3b71cc6`: [execução Windows aprovada](https://github.com/henri16bit/Otimizador-/actions/runs/39177918050) e [executável publicado em ZIP](https://github.com/henri16bit/Otimizador-/releases/download/v0.5.0-preview.3/PCAnalyzer-windows-x64.zip). Restore, build com avisos como erros, **352 testes C#**, cinco testes de pacote, cinco cenários de publicação e oito cenários de leitura de rede passaram no Windows.
+
+- **31 cenários WPF aprovados**, sem erros de binding: relatório na mesma página, cobertura da auditoria, persistência/reabertura, cancelamento com e sem evidências, falha sem reutilizar resultados antigos, exportação de resultados parciais e ausência de comandos de aplicação/restauração. As fontes desses cenários usam fixtures explícitas.
+- Layouts WPF renderizados fora da tela em **1366×768 e 1920×1080**; captura de Recomendações e visão geral do pacote inspecionadas. Isso não substitui validação no DPI e monitor do usuário.
+- **Verificação real no runner Windows:** Registro 32/64 bits confrontado com leitura independente; prioridade/afinidade do processo próprio e contagem nativa de processadores coincidentes; dispositivos PnP presentes; três lotes de CPU/RAM/processos e 361 métricas persistidas. SQLite e relatórios JSON/CSV/HTML mantiveram valores e metadados.
+- A auditoria persistiu **810 avaliações**, com recarga exata e exportação anônima JSON/HTML verificada. Foram **711 observações disponíveis**; as demais mantiveram seu estado de indisponibilidade, sem valores inventados. Cobertura por provedor abaixo.
+- O aplicativo empacotado abriu **10 páginas e 7 abas internas**, passou no tamanho compacto e encerrou com código zero. O ZIP e o SHA256 foram confirmados como `uploaded`, com release pública. ZIP: **148.918.411 bytes**; SHA256: `bca7c3eb0e2d1f16ec398eab82bc66ba079caa6d485a9ebae7d14d1c8aa4d406`.
+
+| Provedor real | Disponíveis / total | Estados restantes no runner |
+| --- | --- | --- |
+| Windows | 483 / 501 | 14 exigiram permissão; 4 com dados insuficientes. |
+| Dispositivos/topologia | 30 / 34 | 4 sem suporte. |
+| Rede | 192 / 244 | 27 erros de leitura; 25 sem suporte. A aprovação não declara esses campos funcionais; exigem inspeção no adaptador/driver alvo. |
+| RAM/armazenamento | 6 / 8 | 2 com dados insuficientes. |
+| NVIDIA | 0 / 23 | 21 sem a ferramenta/API; 2 com dados insuficientes. DRS real não foi validada no runner. |
+
+As tentativas `v0.5.0-preview.1` e `.2` foram bloqueadas antes de publicar binários. A primeira expôs um handle SQLite mantido pelo pool durante a limpeza da fixture Windows; a segunda cancelava o cenário WPF ainda na preparação, antes de o backend produzir a evidência esperada. A limpeza da fixture e a sincronização com a leitura atual foram corrigidas sem remover as asserções. Um teste adicional garante que cancelamento recebido no retorno do backend também marque o relatório como cancelado, preservando as evidências.
+
+Evidências por commit: `refs/notes/pcanalyzer-releases`; capturas: `refs/notes/pcanalyzer-audit-preview` e `refs/notes/pcanalyzer-ui-preview`. Os registros anteriores abaixo são históricos.
 
 A versão atual não aplica/restaura configurações; requisitos antigos de testar tais operações foram substituídos por testes de bloqueio. O escopo implementado e as pendências estão em [PERFORMANCE-CONSULTANCY.md](PERFORMANCE-CONSULTANCY.md). DRS real na RTX 3060, Intel I219-V, dois NVMe, periféricos, ETW/PresentMon em jogo e precisão/overhead no Windows 10 do usuário continuam exigindo validação local.
 
