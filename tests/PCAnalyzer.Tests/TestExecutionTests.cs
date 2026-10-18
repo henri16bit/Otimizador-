@@ -8,6 +8,24 @@ namespace PCAnalyzer.Tests;
 public sealed class TestExecutionTests
 {
     [Fact]
+    public async Task CancellationAfterBackendReturnsCannotLeaveACompletedReport()
+    {
+        var history = new MemoryTestHistory();
+        var service = new TestExecutionService(history);
+        var report = new DiagnosticReport(DiagnosticCompletion.Completed, "Measured", [], [], [], [], []);
+        var run = await service.ExecuteAsync(TestCatalog.Get("system"), (_, _) =>
+        {
+            service.Cancel();
+            return Task.FromResult(new TechnicalResult("Already measured", ["evidence"], Report: report));
+        });
+        Assert.Equal(TestStatus.Cancelled, run.Status);
+        Assert.True(run.Result!.Cancelled);
+        Assert.Equal(DiagnosticCompletion.Cancelled, run.Result.Report!.Completion);
+        Assert.Equal("evidence", Assert.Single(run.Result.Lines));
+        Assert.Equal(DiagnosticCompletion.Cancelled, (await history.LoadTestAsync(run.Id))!.Result!.Report!.Completion);
+    }
+
+    [Fact]
     public async Task StateTransitionsPublishMeasuredProgressAndPersistFullResult()
     {
         var history = new MemoryTestHistory(); var service = new TestExecutionService(history);

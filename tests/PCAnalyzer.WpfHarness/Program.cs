@@ -201,11 +201,17 @@ internal static class Program
         vm.CancelCommand.Execute(null); await Until(() => !vm.IsBusy);
         Require(vm.ExecutionState == "Cancelado" && !vm.HasAuditReport && vm.AuditCategories.Count == 0 && vm.AuditRecommendations.Count == 0 && vm.HasInlineResult,
             "Cancelled audit reused old conclusions.");
-        backend.AuditMode = "partial-cancel"; vm.AuditConfigurationCommand.Execute(null); await Until(() => vm.TestIsActive);
+        var previousAuditCalls = backend.AuditCalls;
+        backend.AuditMode = "partial-cancel"; vm.AuditConfigurationCommand.Execute(null);
+        // Preparing is already active, but cancellation there legitimately returns no evidence.
+        // This scenario requires the current backend invocation to reach its evidence-reading stage.
+        await Until(() => backend.AuditCalls == previousAuditCalls + 1 && vm.TestIsActive
+            && vm.ExecutionStage == "Fixture: lendo configurações");
         vm.CancelCommand.Execute(null); await Until(() => !vm.IsBusy);
         Require(vm.ExecutionState == "Cancelado" && vm.HasAuditReport && vm.CanExportTest && vm.SimpleReportState.Contains("cancelado")
             && vm.AuditCategories.SelectMany(c => c.Assessments).Single(a => a.Assessment.Observation.Status == Availability.Available).RawValue == "0x2A (42)",
-            "Cancelled audit must retain only evidence returned by the current execution and show its cancelled state.");
+            "Cancelled audit must retain only evidence returned by the current execution and show its cancelled state. "
+            + $"State={vm.ExecutionState}; Report={vm.HasAuditReport}; Export={vm.CanExportTest}; Label={vm.SimpleReportState}");
         var cancelledAudit = await backend.LoadTestAsync(vm.RecentAnalyses.First().Id);
         Require(cancelledAudit?.Status == TestStatus.Cancelled && cancelledAudit.Result?.Audit?.Assessments[0].Observation.RawValue == "0x2A (42)",
             "New evidence from cancelled audit was lost from SQLite.");

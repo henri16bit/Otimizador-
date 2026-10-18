@@ -1,4 +1,4 @@
-# PC Performance Analyzer v0.5.0-preview.2
+# PC Performance Analyzer v0.5.0-preview.3
 
 **ANALISAR MEU PC** coordena observação, rede e fontes opcionais em um relatório: o que foi medido, o que merece atenção, o que permanece inconclusivo e qual o próximo passo.
 

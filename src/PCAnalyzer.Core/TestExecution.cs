@@ -92,6 +92,9 @@ public sealed class TestExecutionService(ITestHistoryStore history, Action<strin
             var status = result.Cancelled || cancellation.IsCancellationRequested ? TestStatus.Cancelled
                 : result.Availability is Availability.ReadError or Availability.PermissionRequired or Availability.ToolMissing or Availability.Unsupported
                     ? TestStatus.Failed : result.Partial ? TestStatus.Partial : TestStatus.Completed;
+            if (status == TestStatus.Cancelled)
+                result = result with { Cancelled = true, Report = result.Report is { } report
+                    ? report with { Completion = DiagnosticCompletion.Cancelled } : null };
             Change(s => s with { Status = status, EndedAt = DateTimeOffset.UtcNow, Result = result,
                 Progress = new(status is TestStatus.Completed or TestStatus.Partial ? "Concluído; salvando resultado" : status == TestStatus.Cancelled ? "Cancelado; preservando resultados parciais" : "Falha reportada pela fonte"),
                 Error = status == TestStatus.Failed ? result.Lines.FirstOrDefault() : null });

@@ -2,7 +2,7 @@
 
 ## Auditoria e consultoria somente leitura — 18/10/2026
 
-Validação local da nova versão: restore com lockfiles; reconstrução completa Release com `-warnaserror`, zero avisos/erros; **351 testes C# aprovados**, zero falhas/ignorados (`artifacts/test-results/consultancy.trx`). Cinco testes Python de pacote, cinco cenários PowerShell de publicação e **oito cenários do script real de leitura de rede com cmdlets substituídos** aprovados.
+Validação local da nova versão: restore com lockfiles; reconstrução completa Release com `-warnaserror`, zero avisos/erros; **352 testes C# aprovados**, zero falhas/ignorados (`artifacts/test-results/consultancy.trx`). Cinco testes Python de pacote, cinco cenários PowerShell de publicação e **oito cenários do script real de leitura de rede com cmdlets substituídos** aprovados.
 
 A suíte inclui bloqueio de APIs e verbos privilegiados de escrita; tipos/representações de Registro; MMCSS/IFEO; máscaras/topologia/ABI; DRS/herança; identidade de rede/discos; dados ausentes; snapshots SQLite e anonimização; comparação de campos técnicos e identidade física/processos; cancelamento coerente entre resultado e relatório; teste manual de memória. Alteração apenas de PID não associa processos distintos: criação e executável devem coincidir.
 

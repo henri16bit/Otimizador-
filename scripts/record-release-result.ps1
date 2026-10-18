@@ -29,13 +29,6 @@ if ($testRun) {
         @{ name = [string]$_.testName; message = [string]$_.Output.ErrorInfo.Message; stack = [string]$_.Output.ErrorInfo.StackTrace }
     })
 }
-$previousTests = Get-ChildItem artifacts/previous-test-results -Filter '*.trx' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($previousTests) {
-    [xml]$previousXml = Get-Content -LiteralPath $previousTests.FullName -Raw
-    $result['previousFailedTests'] = @($previousXml.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' } | ForEach-Object {
-        @{ name = [string]$_.testName; message = [string]$_.Output.ErrorInfo.Message; stack = [string]$_.Output.ErrorInfo.StackTrace }
-    })
-}
 if ($steps.ui_flows.outcome -ne 'success') {
     foreach ($stream in @('stdout', 'stderr')) {
         $logPath = "artifacts/ui-flow-$stream.txt"
