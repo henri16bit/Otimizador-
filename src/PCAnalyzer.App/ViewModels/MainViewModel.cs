@@ -74,9 +74,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private MetricRow? _selectedMetric;
     private ProcessRow? _selectedProcess;
     private Finding? _selectedFinding;
-    private SelectionItem? _selectedPowerPlan;
     private NetworkSettingView? _selectedNetworkSetting;
-    private SelectionItem? _selectedNetworkValue;
     private RelativeSeries? _selectedRelativeSeries;
     private ChangeRecord? _selectedChange;
     private SessionSummary? _selectedSession, _beforeSession, _afterSession;
@@ -98,7 +96,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             new("investigar", "Investigar", "\uE721", 3, "Escolha um teste de acordo com o problema observado."),
             new("resultados", "Resultados", "\uE9D2", 4, "Consulte as observações e o resultado do último teste."),
             new("historico", "Histórico", "\uE81C", 5, "Salve, abra e compare sessões de diagnóstico."),
-            new("ajustes", "Otimizações", "\uE9E9", 6, "Revise uma alteração por vez e restaure quando necessário."),
+            new("ajustes", "Recomendações", "\uE9E9", 6, "Entenda as configurações, evidências e próximos testes. Somente consulta."),
             new("config", "Configurações", "\uE713", 7, "Consulte as fontes e ajuste a coleta."),
             new("analisar", "Analisar", "\uE721", 8, "Observe o PC durante o problema e receba um relatório."),
             new("avancado", "Avançado", "\uE950", 9, "Ferramentas para investigar uma medição específica.")];
@@ -129,12 +127,10 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         CaptureFramesCommand = Command(CaptureFramesAsync, () => int.TryParse(ProcessIdText, out var pid) && pid > 0);
         CaptureDpcCommand = Command(CaptureDpcAsync);
         ImportEtlCommand = Command(ImportEtlAsync);
-        RefreshOptimizationCommand = Command(RefreshOptimizationAsync);
-        PowerPreviewCommand = Command(PowerPreviewAsync, () => SelectedPowerPlan is not null);
-        NetworkPreviewCommand = Command(NetworkPreviewAsync, () => SelectedNetworkSetting is not null && SelectedNetworkValue is not null);
-        RestoreCommand = Command(RestoreAsync, () => SelectedChange is { State: not ChangeState.Restored });
+        RefreshLegacyChangesCommand = Command(async () => Replace(Changes, await _backend.ListChangesAsync(OperationToken)));
         CpuSingleCommand = Command(() => LabAsync("cpu"));
         MemoryCommand = Command(() => LabAsync("ram"));
+        MemoryAccessCommand = Command(() => LabAsync("memory-access"));
         DiskReadCommand = Command(() => LabAsync("disk-read"));
         SavePreferencesCommand = Command(SavePreferencesAsync);
         CancelCommand = new RelayCommand(() => { _execution.Cancel(); _operation?.Cancel(); }, () => IsBusy);
@@ -158,7 +154,6 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public ObservableCollection<Capability> Capabilities { get; } = [];
     public ObservableCollection<Finding> Findings { get; } = [];
     public ObservableCollection<SessionSummary> Sessions { get; } = [];
-    public ObservableCollection<SelectionItem> PowerPlans { get; } = [];
     public ObservableCollection<NetworkSettingView> NetworkSettings { get; } = [];
     public ObservableCollection<ChangeRecord> Changes { get; } = [];
     public ObservableCollection<RelativeSeries> ResultSeries { get; } = [];
@@ -236,11 +231,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
     }
     public Finding? SelectedFinding { get => _selectedFinding; set { if (Set(ref _selectedFinding, value)) { Notify(nameof(SelectedFindingCategory)); Notify(nameof(SelectedFindingConfidence)); } } }
-    public SelectionItem? SelectedPowerPlan { get => _selectedPowerPlan; set { Set(ref _selectedPowerPlan, value); PowerPreviewCommand.Refresh(); } }
-    public NetworkSettingView? SelectedNetworkSetting { get => _selectedNetworkSetting; set { Set(ref _selectedNetworkSetting, value); SelectedNetworkValue = null; Notify(nameof(NetworkValues)); Notify(nameof(NetworkSettingState)); } }
-    public IReadOnlyList<SelectionItem> NetworkValues => SelectedNetworkSetting?.ValidValues ?? [];
-    public SelectionItem? SelectedNetworkValue { get => _selectedNetworkValue; set { Set(ref _selectedNetworkValue, value); NetworkPreviewCommand.Refresh(); } }
-    public ChangeRecord? SelectedChange { get => _selectedChange; set { Set(ref _selectedChange, value); RestoreCommand.Refresh(); } }
+    public NetworkSettingView? SelectedNetworkSetting { get => _selectedNetworkSetting; set { Set(ref _selectedNetworkSetting, value); Notify(nameof(NetworkSettingState)); } }
+    public ChangeRecord? SelectedChange { get => _selectedChange; set => Set(ref _selectedChange, value); }
     public SessionSummary? SelectedSession { get => _selectedSession; set { Set(ref _selectedSession, value); LoadSessionCommand.Refresh(); } }
     public SessionSummary? BeforeSession { get => _beforeSession; set { Set(ref _beforeSession, value); CompareCommand.Refresh(); } }
     public SessionSummary? AfterSession { get => _afterSession; set { Set(ref _afterSession, value); CompareCommand.Refresh(); } }
@@ -257,12 +249,10 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public AsyncCommand CaptureFramesCommand { get; }
     public AsyncCommand CaptureDpcCommand { get; }
     public AsyncCommand ImportEtlCommand { get; }
-    public AsyncCommand RefreshOptimizationCommand { get; }
-    public AsyncCommand PowerPreviewCommand { get; }
-    public AsyncCommand NetworkPreviewCommand { get; }
-    public AsyncCommand RestoreCommand { get; }
+    public AsyncCommand RefreshLegacyChangesCommand { get; }
     public AsyncCommand CpuSingleCommand { get; }
     public AsyncCommand MemoryCommand { get; }
+    public AsyncCommand MemoryAccessCommand { get; }
     public AsyncCommand DiskReadCommand { get; }
     public AsyncCommand SavePreferencesCommand { get; }
     public RelayCommand CancelCommand { get; }
@@ -593,54 +583,6 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         if (!Confirm("Captura DPC / ISR de 30 segundos", "Será iniciada uma sessão ETW de kernel limitada a 30 s. A operação solicita elevação pelo Windows e pode adicionar overhead. Reproduza a condição que deseja investigar. O cancelamento encerra a sessão criada pelo aplicativo.\n\nIniciar captura agora?")) return;
         await RunTestAsync("dpc", (progress, ct) => { progress.Report(new("Aguardando UAC / captura ETW de até 30 s")); return _backend.CaptureDpcAsync(ct); });
     }
-    private async Task RefreshOptimizationAsync()
-    {
-        Replace(PowerPlans, await _backend.ListPowerPlansAsync(OperationToken));
-        await DiscoverNetworkAsync();
-        if (SelectedAdapter is not null) await InspectNetworkAsync();
-        Replace(Changes, await _backend.ListChangesAsync(OperationToken));
-        Status = "Planos e propriedades suportadas lidos; nenhuma alteração aplicada.";
-    }
-    private async Task PowerPreviewAsync()
-    {
-        if (SelectedPowerPlan is not { } plan) return;
-        var preview = await _backend.PreviewPowerPlanAsync(plan.Id, OperationToken);
-        ClearOpenedResult();
-        OperationTitle = "Pré-visualização · energia"; OperationText = preview;
-        ResultTab = 1;
-        if (!Confirm("Confirmar alteração do plano de energia", preview + "\n\nAplicar esta alteração e registrar os valores para restauração?")) return;
-        await ShowChangeAsync(await _backend.ApplyPowerPlanAsync(plan.Id, OperationToken));
-    }
-    private async Task NetworkPreviewAsync()
-    {
-        if (SelectedNetworkSetting is not { } setting || SelectedNetworkValue is not { } value) return;
-        var preview = await _backend.PreviewNetworkChangeAsync(setting, value.Id, OperationToken);
-        ClearOpenedResult();
-        OperationTitle = "Pré-visualização · rede"; OperationText = preview;
-        ResultTab = 1;
-        if (!Confirm("Confirmar alteração de rede", preview + "\n\nO valor será gravado com -NoRestart. A ativação pode exigir um reinício posterior autorizado separadamente. Aplicar exatamente esta alteração?")) return;
-        await ShowChangeAsync(await _backend.ApplyNetworkChangeAsync(setting, value.Id, OperationToken));
-    }
-    private async Task RestoreAsync()
-    {
-        if (SelectedChange is not { } change) return;
-        if (!Confirm("Restaurar valor anterior", $"Componente: {change.Target}\nValor anterior: {change.Before}\nValor aplicado: {change.After}\nRisco: {change.Risk}\n{change.RecoveryInstructions}\n\nRestaurar e verificar o estado real?")) return;
-        await ShowChangeAsync(await _backend.RestoreChangeAsync(change.Id, OperationToken));
-    }
-    private async Task ShowChangeAsync(ChangeRecord change)
-    {
-        ClearOpenedResult();
-        OperationTitle = $"Alteração: {ChangeLabelConverter.Label(change.State)}";
-        ResultTab = 1;
-        OperationText = $"{change.Kind} · {change.Target}\nAntes: {change.Before}\nDepois: {change.After}\nEstado verificado: {change.State}\n{change.Error}\n{change.RecoveryInstructions}";
-        Replace(Changes, await _backend.ListChangesAsync(OperationToken)); Status = OperationTitle;
-        if (change.Kind == "network-advanced-property" && SelectedAdapter is not null)
-        {
-            try { await InspectNetworkAsync(); }
-            catch (Exception ex) { _backend.LogError("network.refresh-after-change", ex); }
-        }
-        Notification = OperationTitle + ". Confira o registro abaixo; aplicação não comprova melhoria.";
-    }
     private async Task LabAsync(string test)
     {
         string? path = null;
@@ -653,11 +595,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         {
             "cpu" => "Carga SHA-256 em uma thread por até 5 s. A temperatura e o consumo podem aumentar; o resultado não é uma pontuação comparável entre sistemas. Sensores térmicos podem estar indisponíveis.",
             "ram" => "Alocação e verificação de um buffer de 32 MiB em quatro passagens. Não comprova integridade física da RAM. Pode reduzir a memória disponível temporariamente.",
+            "memory-access" => "Leitura, escrita, cópia e acesso dependente em buffers de 1, 16 e 64 MiB. Reserva até 128 MiB; exige 512 MiB livres. Usa CPU, cache e memória virtual; NÃO isola latência DRAM. Apenas buffers do processo, nenhum arquivo é gravado.",
             _ => $"Leitura de até 64 MiB de um arquivo existente:\n{path}\nNenhuma gravação de benchmark. Cache do Windows pode influenciar o resultado; não representa velocidade nominal do SSD."
         };
         if (!Confirm("Iniciar teste controlado", details + "\n\nO botão Cancelar interrompe a operação. Iniciar agora?")) return;
         await RunTestAsync(test, (progress, ct) => _backend.RunLabAsync(test, path,
-            new InlineProgress<double>(value => progress.Report(new(test == "cpu" ? "Carga de CPU" : test == "ram" ? "Verificando buffer de memória" : "Lendo arquivo", value))), ct));
+            new InlineProgress<double>(value => progress.Report(new(test == "cpu" ? "Carga de CPU" : test is "ram" or "memory-access" ? "Teste de buffers de memória" : "Lendo arquivo", value))), ct));
     }
     private static bool Confirm(string title, string text) => MessageBox.Show(Application.Current.MainWindow, text, title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     private string PreferencesPath => Path.Combine(DataDirectory, "collection-settings.json");

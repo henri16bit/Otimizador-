@@ -98,6 +98,12 @@
           "System.Management": "[10.0.13, )"
         }
       },
+      "pcanalyzer.network": {
+        "type": "Project",
+        "dependencies": {
+          "PCAnalyzer.Core": "[1.0.0, )"
+        }
+      },
       "pcanalyzer.reports": {
         "type": "Project",
         "dependencies": {

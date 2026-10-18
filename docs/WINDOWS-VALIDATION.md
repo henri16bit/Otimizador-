@@ -1,3 +1,5 @@
+> Atualização de 17/10/2026: a versão de consultoria é exclusivamente de leitura. Instruções antigas de aplicar/restaurar abaixo são registro histórico e não se aplicam à versão atual. Consulte [PERFORMANCE-CONSULTANCY.md](PERFORMANCE-CONSULTANCY.md) para o estado vigente.
+
 # Validação no computador Windows do usuário — roteiro
 
 Este documento é um roteiro, **não um registro de resultados aprovados no computador alvo**. O desenvolvimento e a suíte portátil usam Linux; os workflows executam a interface WPF no runner Windows, com resultados registrados em [VALIDATION.md](VALIDATION.md) e nas notas Git por commit. Isso não comprova WMI/Win32, NVML, captura ETW/PresentMon, alteração NetAdapter ou restauração no hardware do usuário.

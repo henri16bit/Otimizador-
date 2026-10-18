@@ -24,7 +24,6 @@ public sealed partial class ApplicationBackend : IApplicationBackend
     private readonly ReversibleChangeEngine _changes;
     private readonly DiagnosticRuleEngine _rules = new();
     private readonly SemaphoreSlim _telemetryGate = new(1, 1);
-    private ChangePreview? _powerPreview, _networkPreview;
     public string DataDirectory { get; }
 
     public ApplicationBackend()
@@ -43,7 +42,7 @@ public sealed partial class ApplicationBackend : IApplicationBackend
         var inventory = await _discovery.DiscoverAsync(ct);
         var capabilities = inventory.Capabilities.ToList();
         capabilities.Add(new("Auxiliar privilegiado", File.Exists(WorkerPath) ? Availability.Available : Availability.ToolMissing,
-            "Usado apenas em ações manuais com UAC. A interface roda como usuário normal."));
+            "Usado apenas para captura manual de DPC/ISR com UAC. Não altera configurações do Windows."));
         capabilities.Add(new("PresentMon", Availability.ToolMissing,
             "Captura opcional: selecione o executável oficial ao iniciar. Importação CSV disponível sem a ferramenta."));
         _lastInventory = inventory with { Capabilities = capabilities };
@@ -126,60 +125,32 @@ public sealed partial class ApplicationBackend : IApplicationBackend
         detail.AdvancedProperties.Select(property => new NetworkSettingView(detail.InterfaceGuid.ToString("D"), detail.Name,
             property.RegistryKeyword, string.IsNullOrWhiteSpace(property.DisplayName) ? property.RegistryKeyword : property.DisplayName,
             NetworkPropertyOperation.SerializeValues(property.RegistryValues),
-            property.CanChange ? property.ValidRegistryValues.Select((v, i) => new SelectionItem(NetworkPropertyOperation.SerializeValue(v),
-                i < property.ValidDisplayValues.Count && !string.IsNullOrWhiteSpace(property.ValidDisplayValues[i]) ? property.ValidDisplayValues[i] : v)).ToArray() : [],
-            $"{property.Function}\n{property.Consequences}\n{property.Recommendation}\n{property.ExpectedImpact}\nDriver: {detail.DriverVersion ?? "indisponível"}. O valor é gravado sem reiniciar; ativação pode exigir reinício manual.",
+            [],
+            $"{property.Function}\n{property.Consequences}\n{property.Recommendation}\n{property.ExpectedImpact}\nDriver: {detail.DriverVersion ?? "indisponível"}. Consulta somente leitura. O valor persistido não comprova efeito ou benefício.",
             property.DisplayValue ?? string.Join(", ", property.RegistryValues),
-            property.CanChange ? "Disponível para revisão" : "Somente leitura · driver não oferece valores reversíveis")
+            "Somente leitura · configuração informada pelo driver")
         ).ToArray();
 
     public Task<IReadOnlyList<SelectionItem>> ListPowerPlansAsync(CancellationToken ct) => Task.Run<IReadOnlyList<SelectionItem>>(() =>
         PowerPlans.List().Select(p => new SelectionItem(p.Id.ToString("D"), p.Name + (p.IsActive ? " (ativo)" : ""))).ToArray(), ct);
     public async Task<string> PreviewPowerPlanAsync(string id, CancellationToken ct)
     {
-        _powerPreview = null;
-        _powerPreview = await _changes.PreviewAsync(new PowerPlanOperation(), Guid.Parse(id).ToString("D"), ct);
-        return Describe(_powerPreview) + "\nMotivo: experimento manual solicitado. Sem melhoria comprovada.\nUm plano diferente pode aumentar consumo, temperatura ou ruído. Compare antes/depois; não exige reinício.";
+        var preview = await _changes.PreviewAsync(new PowerPlanOperation(), Guid.Parse(id).ToString("D"), ct);
+        return Describe(preview) + "\nHipótese de comparação, sem melhoria comprovada.\nUm plano diferente pode aumentar consumo, temperatura ou ruído. Esta versão não modifica o plano.";
     }
-    public Task<ChangeRecord> ApplyPowerPlanAsync(string id, CancellationToken ct)
-    {
-        var preview = _powerPreview ?? throw new InvalidOperationException("Revise o plano antes de aplicar."); _powerPreview = null;
-        var value = Guid.Parse(id).ToString("D");
-        if (preview.After != value) throw new InvalidOperationException("O plano selecionado mudou. Revise novamente.");
-        return _changes.ApplyAsync(new ElevatedOperation(new PowerPlanOperation(), (destination, original) => new(PrivilegedAction.SetPowerPlan,
-            DateTimeOffset.UtcNow, Guid.Parse(destination), Value: destination, ExpectedOriginal: original)), value, ct, preview.Before);
-    }
+    public Task<ChangeRecord> ApplyPowerPlanAsync(string id, CancellationToken ct) =>
+        Task.FromException<ChangeRecord>(AuditOnlyPolicy.ModificationNotSupported());
     public async Task<string> PreviewNetworkChangeAsync(NetworkSettingView setting, string value, CancellationToken ct)
     {
-        _networkPreview = null;
-        _networkPreview = await _changes.PreviewAsync(NetworkOperation(setting), value, ct);
-        return $"Adaptador: {setting.AdapterName}\nPropriedade: {setting.Name}\nAtual exibido: {setting.CurrentDisplayValue}\n" + Describe(_networkPreview) +
-            "\nMotivo: experimento manual. Uma recomendação de benefício requer comparação medida.\n" + setting.Explanation;
+        var preview = await _changes.PreviewAsync(NetworkOperation(setting), value, ct);
+        return $"Adaptador: {setting.AdapterName}\nPropriedade: {setting.Name}\nAtual exibido: {setting.CurrentDisplayValue}\n" + Describe(preview) +
+            "\nHipótese de comparação. Benefício exige medição; nenhuma configuração será alterada.\n" + setting.Explanation;
     }
-    public Task<ChangeRecord> ApplyNetworkChangeAsync(NetworkSettingView setting, string value, CancellationToken ct)
-    {
-        var preview = _networkPreview ?? throw new InvalidOperationException("Revise a propriedade antes de aplicar."); _networkPreview = null;
-        var operation = NetworkOperation(setting);
-        if (preview.Target != operation.Target || preview.After != value) throw new InvalidOperationException("A seleção mudou. Revise novamente.");
-        return _changes.ApplyAsync(ElevateNetwork(operation), value, ct, preview.Before);
-    }
+    public Task<ChangeRecord> ApplyNetworkChangeAsync(NetworkSettingView setting, string value, CancellationToken ct) =>
+        Task.FromException<ChangeRecord>(AuditOnlyPolicy.ModificationNotSupported());
     public Task<IReadOnlyList<ChangeRecord>> ListChangesAsync(CancellationToken ct) => _history.ListChangesAsync(ct);
-    public async Task<ChangeRecord> RestoreChangeAsync(Guid id, CancellationToken ct)
-    {
-        var change = await _history.LoadChangeAsync(id, ct) ?? throw new InvalidOperationException("Registro de alteração não encontrado.");
-        IReversibleOperation operation;
-        if (change.Kind == "active-power-plan")
-            operation = new ElevatedOperation(new PowerPlanOperation(), (value, original) => new(PrivilegedAction.SetPowerPlan,
-                DateTimeOffset.UtcNow, Guid.Parse(value), Value: value, ExpectedOriginal: original));
-        else if (change.Kind == "network-advanced-property")
-        {
-            var parts = change.Target.Split(':', 2);
-            if (parts.Length != 2) throw new InvalidOperationException("Destino de rede inválido no histórico.");
-            operation = ElevateNetwork(new NetworkPropertyOperation(_network, Guid.Parse(parts[0]), parts[1]));
-        }
-        else throw new InvalidOperationException("O tipo de alteração não possui restauração implementada.");
-        return await _changes.RestoreAsync(id, operation, ct);
-    }
+    public Task<ChangeRecord> RestoreChangeAsync(Guid id, CancellationToken ct) =>
+        Task.FromException<ChangeRecord>(AuditOnlyPolicy.ModificationNotSupported());
 
     public async Task<TechnicalResult> ImportFramesAsync(string path, PresentMonParseOptions options, CancellationToken ct)
     {
@@ -292,6 +263,18 @@ public sealed partial class ApplicationBackend : IApplicationBackend
 
     public async Task<TechnicalResult> RunLabAsync(string test, string? path, IProgress<double> progress, CancellationToken ct)
     {
+        if (test == "memory-access")
+        {
+            var memory = await MemoryAccessBenchmark.RunAsync(await Task.Run(WindowsTelemetryCollector.ReadAvailablePhysicalMemoryBytes, ct), progress, ct);
+            await SaveArtifactAsync("memory-access", memory, CancellationToken.None);
+            return new("Acesso e transferência de memória", memory.Measurements.Select(m =>
+                $"{m.BufferMiB} MiB · {m.Operation}: {N(m.MiBPerSecond)} MiB/s; {N(m.NanosecondsPerAccess)} ns/acesso; {m.DurationSeconds:0.######} s.").ToArray(),
+                Indicators: memory.Measurements.Select(m => new ResultIndicator($"memory-access.{m.BufferMiB}.{m.Operation}",
+                    $"{m.Operation} · {m.BufferMiB} MiB", m.MiBPerSecond ?? m.NanosecondsPerAccess,
+                    m.MiBPerSecond.HasValue ? "MiB/s" : "ns/acesso", "Inclui CPU, cache, TLB e memória virtual; não isola DRAM.")).ToArray(),
+                Limitations: memory.Limitations, Cancelled: memory.Cancelled, Partial: memory.Cancelled,
+                ComparisonKey: "memory-access:v1:1-16-64MiB:4passes:1048576hops");
+        }
         var result = test.ToLowerInvariant() switch
         {
             "cpu" or "cpu-single" => await ControlledTests.CpuAsync(progress, ct),
@@ -310,11 +293,8 @@ public sealed partial class ApplicationBackend : IApplicationBackend
     }
     private NetworkPropertyOperation NetworkOperation(NetworkSettingView setting) =>
         new(_network, Guid.Parse(setting.AdapterId), setting.Keyword);
-    private static IReversibleOperation ElevateNetwork(NetworkPropertyOperation operation) =>
-        new ElevatedOperation(operation, (value, original) => new(PrivilegedAction.SetAdapterProperty,
-            DateTimeOffset.UtcNow, operation.InterfaceGuid, operation.RegistryKeyword, value, original));
     private static string Describe(ChangePreview preview) =>
-        $"Tipo: {preview.Kind}\nComponente: {preview.Target}\nOriginal: {preview.Before}\nDestino: {preview.After}\nRisco: {preview.Risk}\nBackup: será persistido antes da escrita.\nRestauração: {preview.RecoveryInstructions}";
+        $"Tipo: {preview.Kind}\nComponente: {preview.Target}\nOriginal: {preview.Before}\nAlternativa para comparação externa: {preview.After}\nRisco: {preview.Risk}\nSomente consulta: nenhuma mudança será executada.\n{preview.RecoveryInstructions}";
     private Task SaveArtifactAsync<T>(string prefix, T value, CancellationToken ct) => Task.Run(async () =>
     {
         var directory = Path.Combine(DataDirectory, "results"); Directory.CreateDirectory(directory);
@@ -339,6 +319,7 @@ public sealed partial class ApplicationBackend : IApplicationBackend
     private static string WorkerPath => Path.Combine(AppContext.BaseDirectory, "worker", "PCAnalyzer.Worker.exe");
     private static async Task<PrivilegedResponse> RunPrivilegedAsync(PrivilegedRequest request, CancellationToken ct)
     {
+        AuditOnlyPolicy.ValidatePrivilegedAction(request.Action);
         ct.ThrowIfCancellationRequested();
         if (!OperatingSystem.IsWindows() || !File.Exists(WorkerPath))
             throw new InvalidOperationException("Auxiliar Windows ausente. Execute a publicação completa, incluindo a pasta worker.");
@@ -352,36 +333,24 @@ public sealed partial class ApplicationBackend : IApplicationBackend
             var info = new ProcessStartInfo(WorkerPath) { UseShellExecute = true, Verb = "runas", WorkingDirectory = AppContext.BaseDirectory };
             info.ArgumentList.Add("--request"); info.ArgumentList.Add(id.ToString("N"));
             using var process = Process.Start(info) ?? throw new InvalidOperationException("O Windows não iniciou o auxiliar.");
-            // Não matar operações de configuração durante a escrita: aguardar confirmação real.
-            using var registration = request.Action == PrivilegedAction.CaptureDpc
-                ? ct.Register(() => { try { File.WriteAllText(PrivilegedProtocol.CancellationPath(id), "cancel"); } catch (IOException) { } })
-                : default;
+            using var registration = ct.Register(() =>
+            {
+                try { File.WriteAllText(PrivilegedProtocol.CancellationPath(id), "cancel"); }
+                catch (IOException) { }
+            });
             await process.WaitForExitAsync(CancellationToken.None);
-            if (!File.Exists(responsePath)) throw new InvalidOperationException("O auxiliar encerrou sem resposta. Releia o estado antes de repetir; o backup está no histórico.");
+            if (!File.Exists(responsePath)) throw new InvalidOperationException("O auxiliar encerrou sem resposta. Consulte o log técnico da captura antes de repetir.");
             var response = JsonSerializer.Deserialize<PrivilegedResponse>(await File.ReadAllTextAsync(responsePath))
                 ?? throw new InvalidOperationException("Resposta inválida do auxiliar.");
             if (!response.Success) throw new InvalidOperationException(response.Detail);
             return response;
         }
-        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) { throw new OperationCanceledException("Elevação UAC recusada; verifique o histórico da operação.", ex, ct); }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) { throw new OperationCanceledException("Elevação UAC recusada; a captura não foi iniciada.", ex, ct); }
         finally
         {
             foreach (var path in new[] { requestPath, responsePath, PrivilegedProtocol.CancellationPath(id) })
                 try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
-    }
-    private sealed class ElevatedOperation(IReversibleOperation inner, Func<string, string, PrivilegedRequest> request) : IExpectedValueOperation
-    {
-        public string Kind => inner.Kind;
-        public string Target => inner.Target;
-        public ChangeRisk Risk => inner.Risk;
-        public string RecoveryInstructions => inner.RecoveryInstructions;
-        public Task<string> ReadAsync(CancellationToken ct) => inner.ReadAsync(ct);
-        public Task ValidateAsync(string value, CancellationToken ct) => inner.ValidateAsync(value, ct);
-        public Task WriteAsync(string value, CancellationToken ct) =>
-            throw new InvalidOperationException("Operações elevadas exigem o valor esperado do backup preparado.");
-        public async Task WriteExpectedAsync(string value, string expectedCurrent, CancellationToken ct) =>
-            await RunPrivilegedAsync(request(value, expectedCurrent), ct);
     }
     public async ValueTask DisposeAsync() { await _collector.DisposeAsync(); _telemetryGate.Dispose(); }
 }

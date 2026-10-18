@@ -1,3 +1,5 @@
+> Atualização de 17/10/2026: a versão de consultoria é exclusivamente de leitura. Instruções antigas de aplicar/restaurar abaixo são registro histórico e não se aplicam à versão atual. Consulte [PERFORMANCE-CONSULTANCY.md](PERFORMANCE-CONSULTANCY.md) para o estado vigente.
+
 # Histórico, exportação e comparação
 
 `SQLiteHistoryStore(caminho)` implementa `IHistoryStore`. O aplicativo deve usar uma pasta local do usuário, por exemplo `%LocalAppData%\PCPerformanceAnalyzer`, e manter o banco fora da árvore do código. Não requer conta, servidor ou credencial.

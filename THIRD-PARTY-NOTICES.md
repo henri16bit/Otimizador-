@@ -14,6 +14,7 @@ O projeto utiliza somente APIs de usuário e não instala drivers kernel própri
 | Microsoft.NET.Test.Sdk | 18.11.0 | [MIT, microsoft/vstest](https://github.com/microsoft/vstest) | Somente desenvolvimento/testes. |
 | xUnit.net | 2.9.3 | [Apache-2.0, xunit/xunit](https://github.com/xunit/xunit) | Somente testes. |
 | xunit.runner.visualstudio | 3.1.5 | [Apache-2.0, xunit/visualstudio.xunit](https://github.com/xunit/visualstudio.xunit) | Somente testes. |
+| NVIDIA NVAPI DRS | Declarações públicas verificadas no catálogo | [NVIDIA/nvapi, MIT](https://github.com/NVIDIA/nvapi) — aviso completo em [NVIDIA-NVAPI-LICENSE.txt](docs/NVIDIA-NVAPI-LICENSE.txt) | DLL nvapi64.dll do driver instalado em System32, não redistribuída; somente leitura, sem APIs Set/Save. |
 | NVIDIA NVML | API da DLL do driver instalado | [NVIDIA NVML](https://docs.nvidia.com/deploy/nvml-api/latest/) — termos do driver NVIDIA | DLL não distribuída pelo aplicativo. Carga dinâmica apenas de System32/NVSMI; não é requisito para GPUs de outro fabricante. |
 | Intel PresentMon Console | Opcional, versão/ajuda verificadas em execução | [MIT, GameTechDev/PresentMon](https://github.com/GameTechDev/PresentMon) | Executável não redistribuído. CLI limitada por tempo/PID e importação dos campos efetivamente presentes. |
 | PowerShell NetAdapter / PowrProf / Win32 | Recursos do Windows | Microsoft Windows | Operações tipadas; nenhuma entrada executada como comando arbitrário. |

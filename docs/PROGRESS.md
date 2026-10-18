@@ -1,3 +1,5 @@
+> Atualização de 17/10/2026: a versão de consultoria é exclusivamente de leitura. Instruções antigas de aplicar/restaurar abaixo são registro histórico e não se aplicam à versão atual. Consulte [PERFORMANCE-CONSULTANCY.md](PERFORMANCE-CONSULTANCY.md) para o estado vigente.
+
 # Progresso da implementação
 
 Atualização de **16/10/2026 — v0.4.0-preview.3**: análise coordenada, painel simples, relatório por componente, recuperação de fontes, detecção automática da rede e configuração de captura de jogos foram integrados e publicados. Cancelamentos preservam dados; importações ficam isoladas das leituras atuais; falhas não reutilizam relatórios antigos. Comparação de análises parciais usa medições disponíveis e identifica a cobertura incompleta. Foram aprovados 243 testes C#, 22 cenários WPF, abertura do pacote e verificação passiva real de CPU/RAM/processo próprio no runner Windows. Evidências: [VALIDATION.md](VALIDATION.md); fases/arquivos/limites: [DIAGNOSTIC-REFACTOR-AUDIT.md](DIAGNOSTIC-REFACTOR-AUDIT.md). Sensores, ETW, jogos, DPI e ajustes no PC alvo continuam pendentes; novos testes multithread/GPU/NVMe avançados não foram declarados implementados.

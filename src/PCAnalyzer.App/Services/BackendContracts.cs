@@ -19,6 +19,7 @@ public interface IApplicationBackend : IAsyncDisposable, ITestHistoryStore
     Task<TelemetryBatch> CollectAsync(TimeSpan interval, CancellationToken ct);
     Task ResetTelemetryAsync(CancellationToken ct);
     Task<TechnicalResult> AnalyzePcAsync(DiagnosticOptions options, IProgress<TestProgress> progress, Action<TelemetryBatch> publishBatch, CancellationToken ct);
+    Task<TechnicalResult> AuditConfigurationAsync(IProgress<TestProgress> progress, CancellationToken ct);
     Task<PresentMonToolInspection> InspectPresentMonAsync(string path, CancellationToken ct);
     IReadOnlyList<Finding> Analyze(HardwareInventory inventory, IReadOnlyList<MetricSample> samples);
     Task SaveSessionAsync(DiagnosticSession session, CancellationToken ct);

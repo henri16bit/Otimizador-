@@ -21,7 +21,8 @@ public sealed record AdapterDetail(Guid InterfaceGuid, string Name, string Descr
     string? DriverInformation, string? DriverDate, string? LinkSpeed, IReadOnlyList<NetworkProperty> AdvancedProperties,
     IReadOnlyList<HardwareFact> Rss, IReadOnlyList<HardwareFact> Statistics,
     Availability Status, IReadOnlyList<string> Limitations,
-    string Source = "PowerShell NetAdapter (Windows inbox)", IReadOnlyList<HardwareFact>? PowerManagement = null);
+    string Source = "PowerShell NetAdapter (Windows inbox)", IReadOnlyList<HardwareFact>? PowerManagement = null,
+    IReadOnlyList<HardwareFact>? Identity = null, Availability PropertiesStatus = Availability.Available);
 
 public interface INetworkPropertyAccess
 {

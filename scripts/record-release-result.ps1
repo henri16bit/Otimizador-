@@ -54,6 +54,7 @@ $previews = @{
     'pcanalyzer-network-fixture-preview' = 'artifacts/ui-flow-screenshot-network-fixture.png'
     'pcanalyzer-analysis-preview' = 'artifacts/ui-flow-screenshot-analysis-fixture.png'
     'pcanalyzer-report-preview' = 'artifacts/ui-flow-screenshot-report-fixture.png'
+    'pcanalyzer-audit-preview' = 'artifacts/ui-flow-screenshot-audit-1366.png'
 }
 foreach ($name in $previews.Keys) {
     $preview = Get-ChildItem $previews[$name] -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1

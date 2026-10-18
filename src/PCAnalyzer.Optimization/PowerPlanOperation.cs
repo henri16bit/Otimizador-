@@ -43,14 +43,7 @@ public static class PowerPlans
         }
         throw new InvalidOperationException("Quantidade de planos excedeu o limite de segurança.");
     }
-    public static void SetActive(Guid plan)
-    {
-        EnsureWindows();
-        if (plan == Guid.Empty || !List().Any(x => x.Id == plan))
-            throw new ArgumentException("O plano deve existir neste computador.", nameof(plan));
-        Check(Native.PowerSetActiveScheme(0, ref plan));
-        if (ReadActive() != plan) throw new InvalidOperationException("PowrProf não confirmou o plano ativo solicitado.");
-    }
+    public static void SetActive(Guid plan) => throw AuditOnlyPolicy.ModificationNotSupported();
     private static string ReadName(Guid id)
     {
         uint size = 0;
@@ -74,8 +67,6 @@ public static class PowerPlans
         [DllImport("powrprof.dll", ExactSpelling = true)]
         internal static extern uint PowerGetActiveScheme(nint rootPowerKey, out nint activePolicyGuid);
         [DllImport("powrprof.dll", ExactSpelling = true)]
-        internal static extern uint PowerSetActiveScheme(nint rootPowerKey, ref Guid schemeGuid);
-        [DllImport("powrprof.dll", ExactSpelling = true)]
         internal static extern uint PowerEnumerate(nint rootPowerKey, nint schemeGuid, nint subGroupGuid,
             uint accessFlags, uint index, [Out] byte[] buffer, ref uint bufferSize);
         [DllImport("powrprof.dll", ExactSpelling = true)]
@@ -92,9 +83,8 @@ public sealed class PowerPlanOperation : IReversibleOperation
     public string Target => "active-system-plan";
     public ChangeRisk Risk => ChangeRisk.Low;
     public string RecoveryInstructions =>
-        "Restaure pelo histórico para o GUID original se o plano ainda existir. " +
-        "Alternativa: Painel de Controle → Opções de Energia → selecionar o plano original. " +
-        "Não apagar planos durante a comparação; consumo e temperatura podem variar.";
+        "O histórico preserva o plano original para consulta. Esta versão não altera nem restaura planos. " +
+        "Uma comparação realizada externamente deve considerar consumo, temperatura e ruído.";
     public Task<string> ReadAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -108,9 +98,6 @@ public sealed class PowerPlanOperation : IReversibleOperation
             throw new ArgumentException("Informe GUID canônico de um plano instalado neste computador.", nameof(value));
         return Task.CompletedTask;
     }
-    public async Task WriteAsync(string value, CancellationToken cancellationToken)
-    {
-        await ValidateAsync(value, cancellationToken);
-        PowerPlans.SetActive(Guid.ParseExact(value, "D"));
-    }
+    public Task WriteAsync(string value, CancellationToken cancellationToken) =>
+        Task.FromException(AuditOnlyPolicy.ModificationNotSupported());
 }

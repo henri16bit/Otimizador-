@@ -9,7 +9,7 @@ name: Publish Windows release
       tag:
         description: Existing version tag to publish
         required: true
-        default: v0.4.0-preview.3
+        default: v0.5.0-preview.1
 
 permissions:
   contents: read
@@ -47,6 +47,10 @@ jobs:
         id: release_tests
         shell: pwsh
         run: ./tests/release_tests/ReleasePublication.Tests.ps1
+      - name: Test network identity mapping without changing adapters
+        id: network_tests
+        shell: pwsh
+        run: ./tests/network_tests/NetworkRead.Tests.ps1
       - name: Restore locked dependencies
         id: restore
         run: dotnet restore PCAnalyzer.sln --locked-mode

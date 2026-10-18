@@ -15,6 +15,23 @@ public sealed partial class ApplicationBackend
         Action<TelemetryBatch> publishBatch, CancellationToken ct)
     {
         var result = await new DiagnosticOrchestrator(new AnalysisProbe(this)).RunAsync(options, progress, publishBatch, ct);
+        // Read configuration after the observation window so the inventory work does not
+        // become part of the CPU/disk load being interpreted as the user's workload.
+        if (!ct.IsCancellationRequested && !result.Cancelled)
+        {
+            try
+            {
+                var audit = await AuditConfigurationAsync(progress, ct);
+                result = DiagnosticAuditIntegration.Merge(result, audit);
+            }
+            catch (Exception error)
+            {
+                if (error is not OperationCanceledException) LogError("analysis.audit", error);
+                result = DiagnosticAuditIntegration.Merge(result, new("Auditoria interrompida", [], Partial: true,
+                    Cancelled: ct.IsCancellationRequested, Availability: Availability.InsufficientData,
+                    Limitations: ["A auditoria de configurações não terminou; as medições anteriores foram preservadas."]));
+            }
+        }
         if (result.Session is { } session)
         {
             try { result = result with { Session = await WithChangesAsync(session, CancellationToken.None) }; }

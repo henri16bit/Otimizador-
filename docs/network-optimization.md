@@ -1,3 +1,5 @@
+> Atualização de 17/10/2026: a versão de consultoria é exclusivamente de leitura. Instruções antigas de aplicar/restaurar abaixo são registro histórico e não se aplicam à versão atual. Consulte [PERFORMANCE-CONSULTANCY.md](PERFORMANCE-CONSULTANCY.md) para o estado vigente.
+
 # Rede e alterações reversíveis
 
 ## Implementado

@@ -42,6 +42,12 @@ public sealed partial class MainViewModel
     private TestSession? _displayedExecution, _openedTest;
     private static readonly IReadOnlyList<TestDefinition> DiagnosticDefinitions =
     [
+        new("audit.configuration", "Auditoria de otimizações", "Identificar configurações atuais e avaliar o que elas permitem concluir.",
+            "Windows, drivers e dispositivos cobertos pelo catálogo; fontes ausentes ficam identificadas.",
+            "Varia conforme os provedores; acompanhe cada etapa.",
+            "Somente leitura. Não aplica ajustes nem inicia benchmarks.", "Usuário normal; valores protegidos podem ficar indisponíveis.",
+            "APIs Windows, consultas delimitadas e documentação do catálogo.",
+            "Encontrar um valor não comprova que o sistema o utiliza nem que houve ganho de desempenho."),
         new("general", "Analisar meu PC", "Entender o comportamento atual e receber próximos passos com evidências.",
             "CPU, memória, GPU, discos, processos e conexão disponíveis; ping e drivers são opcionais.",
             "30 segundos de observação; fontes opcionais e preparação podem acrescentar tempo.",
@@ -56,7 +62,7 @@ public sealed partial class MainViewModel
             "Jogo selecionado, PresentMon e coletores disponíveis.",
             "FPS e frametime não medem input lag físico. Uma fonte ausente deixa o relatório parcial; compatibilidade com o jogo exige conferência local.")
     ];
-    private TestDefinition _selectedTest = DiagnosticDefinitions[0];
+    private TestDefinition _selectedTest = DiagnosticDefinitions.Single(d => d.Id == "general");
     private bool _findingFromResult;
     private TestRunRow? _selectedRun, _beforeRun, _afterRun;
     private string _notification = "Escolha um diagnóstico. A execução e o resultado aparecem aqui.";
@@ -189,11 +195,12 @@ public sealed partial class MainViewModel
     }
     private Task StartSelectedTestAsync() => SelectedTest.Id switch
     {
+        "audit.configuration" => RunTestAsync("audit.configuration", (progress, ct) => _backend.AuditConfigurationAsync(progress, ct)),
         "general" => StartAnalysisAsync(false),
         "gaming-analysis" => StartAnalysisAsync(true),
         "system" => RunTestAsync("system", ObserveSystemAsync),
         "ping" => RunTestAsync("ping", (progress, ct) => _backend.PingAsync(PingHost.Trim(), SelectedAdapter?.Id, progress, ct)),
-        "cpu" or "ram" or "disk-read" => LabAsync(SelectedTest.Id),
+        "cpu" or "ram" or "memory-access" or "disk-read" => LabAsync(SelectedTest.Id),
         "frames" => CaptureFramesAsync(), "frames-import" => ImportFramesAsync(),
         "dpc" => CaptureDpcAsync(), "etl-import" => ImportEtlAsync(),
         _ => throw new InvalidOperationException(SelectedTest.Limitations)
@@ -235,6 +242,7 @@ public sealed partial class MainViewModel
                 "O arquivo não identifica de forma verificável todo o hardware de origem.")]);
         }
         Notification = definition.Name + " iniciado. Acompanhe aqui ou continue navegando.";
+        if (id is "general" or "gaming-analysis" or "audit.configuration") ClearOpenedResult();
         ExecutionLog.Clear();
         var run = await _execution.ExecuteAsync(definition, async (progress, ct) =>
         {
@@ -271,7 +279,7 @@ public sealed partial class MainViewModel
         try { await RefreshTestsAsync(); }
         catch (Exception ex) { _backend.LogError("test.history.refresh", ex); historyWarning = " Resultado disponível; não foi possível atualizar a lista do histórico."; }
         Notification = $"{run.Name}: {TestLabels.Status(run.Status).ToLowerInvariant()}. " +
-            (run.PersistenceError ?? "Resultado disponível em Resultados.") + historyWarning;
+            (run.PersistenceError ?? (id is "general" or "gaming-analysis" or "audit.configuration" ? "Relatório nesta tela e no histórico." : "Resultado disponível em Resultados.")) + historyWarning;
         Status = Notification;
     }
     private void OnExecutionChanged(TestSession session)
@@ -330,14 +338,14 @@ public sealed partial class MainViewModel
         var selected = SelectedRun?.Id;
         var history = await _backend.ListTestsAsync(100, _lifetime.Token);
         Replace(TestHistory, history.Select(r => new TestRunRow(r)));
-        Replace(RecentAnalyses, TestHistory.Where(r => r.Run.TestId is "general" or "gaming-analysis").Take(5));
+        Replace(RecentAnalyses, TestHistory.Where(r => r.Run.TestId is "general" or "gaming-analysis" or "audit.configuration").Take(5));
         SelectedRun = TestHistory.FirstOrDefault(r => r.Id == selected) ?? TestHistory.FirstOrDefault();
         if (_displayedExecution is null && TestHistory.FirstOrDefault() is { } latest)
         {
             _displayedExecution = await _backend.LoadTestAsync(latest.Id, _lifetime.Token);
             RefreshExecutionDisplay();
         }
-        foreach (var candidate in TestHistory.Where(r => r.Run.TestId is "general" or "gaming-analysis"))
+        foreach (var candidate in TestHistory.Where(r => r.Run.TestId is "general" or "gaming-analysis" or "audit.configuration"))
         {
             var analysis = _displayedExecution?.Id == candidate.Id ? _displayedExecution
                 : await _backend.LoadTestAsync(candidate.Id, _lifetime.Token);

@@ -16,6 +16,16 @@ public static class TestResultComparer
             return new("Falta contexto para comparar", lines.Concat(["Uma execução não contém inventário e contexto da coleta."]).ToArray(), Availability: Availability.InsufficientData);
         if (string.IsNullOrEmpty(before.Result.ComparisonKey) || before.Result.ComparisonKey != after.Result.ComparisonKey)
             return new("Destinos ou métodos não equivalentes", lines.Concat(["O destino, arquivo, método ou identidade da carga difere ou não foi registrado. Nenhuma diferença foi calculada."]).ToArray(), Availability: Availability.InsufficientData);
+        if (before.Result.Audit is { } firstAudit && after.Result.Audit is { } secondAudit)
+        {
+            var sameHardware = SessionComparer.HaveEquivalentHardware(a, b);
+            if (!sameHardware)
+                lines.Add("Snapshots de configuração não comparados: a identidade do inventário difere ou está incompleta.");
+            else lines.AddRange(AuditSnapshotComparer.Describe(firstAudit, secondAudit));
+            if (before.TestId == "audit.configuration")
+                return new("Comparação das configurações", lines, Availability: sameHardware
+                    ? Availability.Available : Availability.InsufficientData);
+        }
         var comparison = SessionComparer.Compare(a, b);
         lines.Add(comparison.ConditionsComparable ? "Condições documentadas equivalentes; repetições ainda são necessárias." : "Condições diferentes ou cobertura insuficiente; não conclua melhoria.");
         lines.AddRange(comparison.Warnings);

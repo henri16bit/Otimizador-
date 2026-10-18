@@ -14,6 +14,14 @@ public sealed record SessionComparison(Guid BeforeId, Guid AfterId, bool Conditi
 /// <summary>Compares matching measurement semantics and warns when the experiment conditions differ.</summary>
 public static class SessionComparer
 {
+    internal static bool HaveEquivalentHardware(DiagnosticSession before, DiagnosticSession after)
+    {
+        if (!string.IsNullOrWhiteSpace(before.Context.HardwareFingerprint) && !string.IsNullOrWhiteSpace(after.Context.HardwareFingerprint)
+            && before.Context.HardwareFingerprint != after.Context.HardwareFingerprint) return false;
+        var first = HardwareSignature(before.Inventory);
+        var second = HardwareSignature(after.Inventory);
+        return first.Length > 0 && first.SequenceEqual(second, StringComparer.Ordinal);
+    }
     private static readonly HashSet<string> PhysicalFacts = new(StringComparer.OrdinalIgnoreCase)
     {
         "Manufacturer", "Model", "Product", "PartNumber", "Capacity", "Size", "TotalPhysicalMemory",

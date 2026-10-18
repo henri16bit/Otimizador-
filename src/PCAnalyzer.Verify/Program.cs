@@ -26,7 +26,7 @@ internal static class Program
     {
         if (arguments.Any(argument => argument is "--help" or "-h"))
         {
-            Console.WriteLine("PCAnalyzer.Verify [--output DIRETÓRIO]\nValidação manual passiva: inventário, CPU/RAM/processo próprio, 3 a 6 lotes a cada 2 s, SQLite e relatórios anônimos. Sem elevação.");
+            Console.WriteLine("PCAnalyzer.Verify [--output DIRETÓRIO]\nValidação manual passiva: inventário, CPU/RAM/processo próprio, 3 a 6 lotes a cada 2 s, auditoria de configurações, SQLite e relatórios anônimos. Sem elevação.");
             return 0;
         }
         string directory;
@@ -118,7 +118,10 @@ internal static class Program
             if (await File.ReadAllTextAsync(htmlPath, cancellation.Token) != ReportExporter.ExportHtml(saved, true))
                 throw new InvalidDataException("HTML escrito difere da exportação da sessão salva.");
 
-            var pass = checks.All(check => check.Passed);
+            phase = "auditoria passiva e relatórios";
+            var audit = await AuditVerification.RunAsync(runDirectory, saved, store, JsonOptions, cancellation.Token);
+            var telemetryPassed = checks.All(check => check.Passed);
+            var pass = telemetryPassed && audit.Passed;
             var ownProcessSamples = batches.Select((batch, index) =>
             {
                 var self = OwnProcess(batch);
@@ -131,8 +134,9 @@ internal static class Program
             }).ToArray();
             var result = new
             {
-                schemaVersion = 2, sessionId = session.Id, capturedAtUtc = DateTimeOffset.UtcNow, platform = "Windows",
-                requiredMetricsAvailable = pass, nvidiaGpuTelemetryRequired = gpuRequired, sampleBatches = batches.Count,
+                schemaVersion = 3, sessionId = session.Id, capturedAtUtc = DateTimeOffset.UtcNow, platform = "Windows",
+                requiredMetricsAvailable = telemetryPassed, requiredAuditChecksPassed = audit.Passed, audit,
+                nvidiaGpuTelemetryRequired = gpuRequired, sampleBatches = batches.Count,
                 evaluatedBatches = batches.Select((_, index) => index + 1).Skip(1).TakeLast(2).ToArray(),
                 maximumBatches = MaximumBatches, ownProcessSamples,
                 savedMetricCount = saved.Samples.Count, exactSqliteRoundTrip = true,
@@ -147,8 +151,8 @@ internal static class Program
                 "GPU: nenhuma NVIDIA identificada; critérios de telemetria GPU não validados por esta execução.");
             Console.WriteLine("Relatórios JSON/CSV/HTML anônimos verificados a partir dos dados recarregados. O banco SQLite guarda dados locais completos.");
             Console.WriteLine($"Artefatos: pasta {runName} no diretório " + (arguments.Length == 0 ? @"%LOCALAPPDATA%\PCAnalyzer\validation." : "informado em --output."));
-            Console.WriteLine(pass ? "Verificação passiva concluída; CPU/RAM e processo próprio disponíveis após aquecimento. Precisão por referência e demais critérios Windows continuam pendentes." :
-                "Verificação incompleta: faltaram leituras essenciais. Artefatos preservados com os estados reais.");
+            Console.WriteLine(pass ? "Verificação passiva concluída; CPU/RAM, processo próprio e auditoria real aprovados. Precisão por referência e demais critérios Windows continuam pendentes." :
+                "Verificação incompleta: faltaram leituras essenciais ou critérios da auditoria. Artefatos preservados com os estados reais.");
             return pass ? 0 : 3;
         }
         catch (OperationCanceledException) { Console.Error.WriteLine("Validação cancelada; recursos de coleta foram liberados. Uma exportação interrompida não é declarada válida."); return 130; }

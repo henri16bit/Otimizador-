@@ -1,5 +1,15 @@
 # Validação executada
 
+## Auditoria e consultoria somente leitura — 18/10/2026
+
+Validação local da nova versão: restore com lockfiles; reconstrução completa Release com `-warnaserror`, zero avisos/erros; **351 testes C# aprovados**, zero falhas/ignorados (`artifacts/test-results/consultancy.trx`). Cinco testes Python de pacote, cinco cenários PowerShell de publicação e **oito cenários do script real de leitura de rede com cmdlets substituídos** aprovados.
+
+A suíte inclui bloqueio de APIs e verbos privilegiados de escrita; tipos/representações de Registro; MMCSS/IFEO; máscaras/topologia/ABI; DRS/herança; identidade de rede/discos; dados ausentes; snapshots SQLite e anonimização; comparação de campos técnicos e identidade física/processos; cancelamento coerente entre resultado e relatório; teste manual de memória. Alteração apenas de PID não associa processos distintos: criação e executável devem coincidir.
+
+O workflow exige **31 cenários WPF**, abertura do pacote e verificação Windows real antes de publicar. O verificador acrescenta consultas dos provedores, confronto independente do Registro 32/64 bits, prioridade/afinidade do processo próprio, contagem nativa de processadores e persistência/exportação exata de auditoria. A evidência desta execução será registrada no Git para o commit da release. Os resultados anteriores abaixo são históricos, não validação dessas novas funções.
+
+A versão atual não aplica/restaura configurações; requisitos antigos de testar tais operações foram substituídos por testes de bloqueio. O escopo implementado e as pendências estão em [PERFORMANCE-CONSULTANCY.md](PERFORMANCE-CONSULTANCY.md). DRS real na RTX 3060, Intel I219-V, dois NVMe, periféricos, ETW/PresentMon em jogo e precisão/overhead no Windows 10 do usuário continuam exigindo validação local.
+
 ## Análise coordenada — 16/10/2026
 
 Versão **v0.4.0-preview.3**, código `5626928abe795ca0a7ff4f00295130fe3caba48c`: [execução Windows aprovada](https://github.com/henri16bit/Otimizador-/actions/runs/38980121940) e [ZIP publicado](https://github.com/henri16bit/Otimizador-/releases/tag/v0.4.0-preview.3).

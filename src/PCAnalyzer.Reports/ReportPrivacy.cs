@@ -32,6 +32,43 @@ public static class ReportPrivacy
         return RedactReport(report, CreateTextRedactor(context));
     }
 
+    internal static PerformanceAuditReport RedactAudit(PerformanceAuditReport report, Func<string, string> clean)
+    {
+        // Audit snapshots may contain identifiers not present in the hardware inventory.
+        var identifiers = report.Assessments.SelectMany(a => a.Observation.Facts)
+            .Where(f => IsPrivateFact(f.Key) && f.Value.Length >= 3 &&
+                !double.TryParse(f.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+            .Select(f => f.Value).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(v => v.Length).ToArray();
+        var pattern = identifiers.Length == 0 ? null : new Regex(string.Join("|", identifiers.Select(Regex.Escape)),
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+        string Clean(string value) => clean(pattern?.Replace(value, Redacted) ?? value);
+        return report with
+        {
+            Summary = Clean(report.Summary), Limitations = report.Limitations.Select(Clean).ToArray(),
+            Assessments = report.Assessments.Select(a => a with
+            {
+                Observation = a.Observation with
+                {
+                    InstanceId = "instancia-" + Fingerprint(a.Observation.InstanceId),
+                    Name = Clean(a.Observation.Name), Scope = Clean(a.Observation.Scope),
+                    RawValue = a.Observation.RawValue is null ? null : Clean(a.Observation.RawValue),
+                    Source = Clean(a.Observation.Source), Limitation = a.Observation.Limitation is null ? null : Clean(a.Observation.Limitation),
+                    Facts = a.Observation.Facts.ToDictionary(p => p.Key, p => IsPrivateFact(p.Key) ? Redacted : Clean(p.Value))
+                },
+                Summary = Clean(a.Summary), Reason = Clean(a.Reason), PossibleBenefit = Clean(a.PossibleBenefit),
+                Risks = Clean(a.Risks), Validation = Clean(a.Validation),
+                Rule = a.Rule with
+                {
+                    Name = Clean(a.Rule.Name), Category = Clean(a.Rule.Category), Method = Clean(a.Rule.Method),
+                    Prerequisites = Clean(a.Rule.Prerequisites), Compatibility = Clean(a.Rule.Compatibility),
+                    RequiredEvidence = Clean(a.Rule.RequiredEvidence), ImpactHypothesis = Clean(a.Rule.ImpactHypothesis),
+                    Limitations = Clean(a.Rule.Limitations), Validation = Clean(a.Rule.Validation)
+                    // Sources are public technical references from the catalog, not collected machine data.
+                }
+            }).ToArray()
+        };
+    }
+
     internal static DiagnosticReport RedactReport(DiagnosticReport report, Func<string, string> clean) => report with
     {
         Summary = clean(report.Summary),

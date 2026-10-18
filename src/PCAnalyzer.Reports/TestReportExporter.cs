@@ -21,6 +21,7 @@ public static class TestReportExporter
         static string H(string? text) => WebUtility.HtmlEncode(text ?? "");
         var html = new StringBuilder("<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>PC Analyzer — resultado</title><style>body{font:16px system-ui;background:#101827;color:#e2e8f0;max-width:1080px;margin:32px auto;padding:20px}article,details{background:#192337;padding:18px;margin:12px 0;border-radius:8px}td,th{padding:10px;text-align:left;border-bottom:1px solid #334155}pre{white-space:pre-wrap;overflow-wrap:anywhere}h2{color:#93c5fd}</style><h1>");
         html.Append(H(safe.Name)).Append("</h1><p>").Append(H(safe.Status.ToString())).Append(" · ").Append(H(safe.StartedAt.ToString("O"))).Append("</p><p>").Append(H(safe.Error)).Append("</p>");
+        if (safe.Result?.Audit is { } audit) html.Append(PerformanceAuditHtml.Render(audit, safe.Result.Report));
         if (safe.Result?.Report is { } report)
         {
             html.Append("<h2>Conclusão da análise</h2><article><p>").Append(H(report.Completion switch
@@ -85,6 +86,7 @@ public static class TestReportExporter
                 Title = clean(result.Title), Lines = result.Lines.Select(clean).ToArray(), Metrics = metrics.Samples, Findings = metrics.Findings,
                 ComparisonKey = result.ComparisonKey is null ? null : clean(result.ComparisonKey),
                 Report = result.Report is null ? null : ReportPrivacy.RedactReport(result.Report, clean),
+                Audit = result.Audit is null ? null : ReportPrivacy.RedactAudit(result.Audit, clean),
                 Session = result.Session is null ? null : safe,
                 Limitations = result.Limitations?.Select(clean).ToArray(),
                 Indicators = result.Indicators?.Select(i => i with { Id = clean(i.Id), Name = clean(i.Name), Unit = clean(i.Unit), Detail = clean(i.Detail) }).ToArray(),
