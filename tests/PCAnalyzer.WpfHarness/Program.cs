@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using System.Windows.Input;
+using System.Windows.Media;
 using PCAnalyzer.App.Controls;
 using PCAnalyzer.App;
 using PCAnalyzer.App.Services;
@@ -45,7 +46,7 @@ internal static class Program
                         "general result on same page", "audit command and same-page coverage", "audit SQLite history reopen", "read-only consultation without apply controls", "audit cancellation and failure clear stale conclusions",
                         "audit partial state and export", "cancelled audit retains only newly collected evidence", "audit layouts at requested viewports", "memory access test is discoverable and manual", "category filters search and ordering", "large audit list virtualizes containers",
                         "compact rows hide technical identities", "detail modal closes with keyboard and preserves context", "priority recommendations exclude disabled and ignored entries",
-                        "manual network result remains in its category and preserves audit", "simulated 100 125 and 150 percent layouts", "one-click passive analysis needs no confirmation" },
+                        "manual network result remains in its category and preserves audit", "simulated 100 125 and 150 percent layouts", "one-click passive analysis needs no confirmation", "rendered setting and modal values meet contrast checks" },
                     fixtureDataOnly = true, hardwareOrConfigurationChanged = false }));
                 _exitCode = 0;
             }
@@ -237,10 +238,17 @@ internal static class Program
     {
         vm.NavigateCommand.Execute("dashboard");
         var confirmations = _confirmationCalls;
+        window.UpdateLayout();
+        var primary = Descendants<Button>(window).Single(b => ReferenceEquals(b.Command, vm.AnalyzePcCommand));
+        Require(Descendants<TextBlock>(primary).Any(t => t.Text == "ANALISAR MEU PC" && Contrast(t.Foreground, primary.Background) >= 4.5),
+            "The main action must render its label with readable contrast.");
+        vm.IncludePing = true; vm.IncludeLatency = true;
         vm.AnalyzePcCommand.Execute(null);
         await Until(() => !vm.IsBusy);
-        Require(_confirmationCalls == confirmations && vm.HasSimpleReport && vm.SelectedSection?.Id == "dashboard",
+        Require(_confirmationCalls == confirmations && vm.HasSimpleReport && vm.SelectedSection?.Id == "dashboard"
+            && backend.LastAnalysisOptions is { IncludePing: false, IncludeLatency: false, Gaming: false },
             "The passive general analysis must start with one click, finish on its initiating page and not request active-test confirmation.");
+        vm.IncludePing = false; vm.IncludeLatency = false;
 
         var report = ExperienceFixture();
         await RunFixture(vm, "audit.configuration", (_, _) => Task.FromResult(new TechnicalResult("Fixture de experiência", [report.Summary], Audit: report, Partial: true)));
@@ -287,7 +295,7 @@ internal static class Program
         details.BringIntoView(); details.Focus();
         Require(details.IsKeyboardFocused, "The setting details action must be reachable by keyboard before opening the modal.");
         Exception? modalFailure = null;
-        _ = window.Dispatcher.BeginInvoke(() =>
+        _ = window.Dispatcher.BeginInvoke(async () =>
         {
             AuditSettingDialog? dialog = null;
             try
@@ -299,10 +307,15 @@ internal static class Program
                 Require(!technical.IsExpanded && close.IsKeyboardFocused, "Technical details must start collapsed and the modal must receive keyboard focus.");
                 Require(dialog.ActualWidth <= 680 && dialog.ActualHeight <= SystemParameters.WorkArea.Height,
                     "The explanation modal exceeds the available work area.");
+                foreach (var value in new[] { selected.CurrentValue, selected.RecommendedValue, selected.Reason, selected.Validation })
+                    Require(Descendants<TextBlock>(dialog).Any(t => t.Text == value && Contrast(t.Foreground, dialog.Background) >= 4.5),
+                        "A key explanation value is unreadable: " + value);
                 technical.IsExpanded = true; dialog.UpdateLayout();
                 Require(Descendants<TextBox>(dialog).Any(t => t.IsReadOnly && t.Text.Contains("HKEY_LOCAL_MACHINE", StringComparison.Ordinal)),
                     "The original registry evidence is no longer accessible in technical details.");
                 technical.IsExpanded = false;
+                await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                dialog.UpdateLayout();
                 diagnostics.CaptureView((FrameworkElement)dialog.Content, "setting-modal");
                 dialog.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(dialog), Environment.TickCount, Key.Escape)
                     { RoutedEvent = Keyboard.PreviewKeyDownEvent });
@@ -357,10 +370,19 @@ internal static class Program
             var viewport = new Size(pixels.Width / scale, pixels.Height / scale);
             content.Width = viewport.Width; content.Height = viewport.Height;
             content.Measure(viewport); content.Arrange(new Rect(new Point(), viewport));
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            content.UpdateLayout();
             Require(Math.Abs(content.ActualWidth - viewport.Width) < 1 && Math.Abs(content.ActualHeight - viewport.Height) < 1,
                 $"Simulated viewport failed: {pixels}, scale={scale}.");
             Require(Descendants<AuditSettingRow>(content).Any() && Descendants<Button>(content).Where(b => b.Name == "SettingDetailsButton").All(b => b.ActualWidth >= 50),
                 $"Compact audit rows lost usable detail controls at {pixels}, scale={scale}.");
+            foreach (var visibleRow in Descendants<AuditSettingRow>(content).Where(r => r.DataContext is AuditSettingPresentation))
+            {
+                var model = (AuditSettingPresentation)visibleRow.DataContext;
+                foreach (var value in new[] { model.Name, model.CurrentValue, model.RecommendedValue })
+                    Require(Descendants<TextBlock>(visibleRow).Any(t => t.Text == value && t.ActualWidth > 0 && Contrast(t.Foreground, (Brush)window.FindResource("Background")) >= 4.5),
+                        $"An audit row did not finish rendering legible values at {pixels}, scale={scale}: {value}");
+            }
             diagnostics.CaptureView(content, $"audit-{pixels.Width}-scale-{scale.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}-simulated");
         }
         content.Width = double.NaN; content.Height = double.NaN; window.InvalidateMeasure(); window.UpdateLayout();
@@ -393,6 +415,12 @@ internal static class Program
         Require(vm.SelectedSection?.Id == "resultados" && vm.OperationTitle == "Fixture: rede concluída" && vm.CanExportTest
             && vm.ResultIndicators.Any(i => i.Reading.StartsWith("1")),
             "Opening the network category result must select its own session, even after another category completed a newer test.");
+        vm.NavigateCommand.Execute("dashboard"); window.UpdateLayout();
+        var retainedDetails = Descendants<Expander>(window).Single(e => Equals(e.Header, "Detalhes técnicos da análise"));
+        retainedDetails.IsExpanded = true; window.UpdateLayout();
+        Require(vm.SelectedSection?.Id == "dashboard" && vm.HasAuditReport && vm.OperationTitle == "Fixture de experiência",
+            "Opening retained audit details must select the audit snapshot, not the most recent network or memory result.");
+        retainedDetails.IsExpanded = false;
     }
 
     private static PerformanceAuditReport ExperienceFixture()
@@ -438,6 +466,14 @@ internal static class Program
         await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
     }
     private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
+    private static double Contrast(Brush foreground, Brush background)
+    {
+        if (foreground is not SolidColorBrush f || background is not SolidColorBrush b) return 0;
+        static double Channel(byte value) { var s = value / 255d; return s <= .04045 ? s / 12.92 : Math.Pow((s + .055) / 1.055, 2.4); }
+        static double Light(Color c) => .2126 * Channel(c.R) + .7152 * Channel(c.G) + .0722 * Channel(c.B);
+        var x = Light(f.Color); var y = Light(b.Color);
+        return (Math.Max(x, y) + .05) / (Math.Min(x, y) + .05);
+    }
     private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
     {
         for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
@@ -459,6 +495,7 @@ internal sealed class ScenarioBackend : IApplicationBackend
     private readonly Guid _adapter = Guid.NewGuid();
     public string Mode { get; set; } = "complete";
     public string AuditMode { get; set; } = "complete";
+    public DiagnosticOptions? LastAnalysisOptions { get; private set; }
     public int AuditCalls { get; private set; }
     public int LabCalls { get; private set; }
     public TaskCompletionSource<TechnicalResult> FinishPing { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -496,6 +533,7 @@ internal sealed class ScenarioBackend : IApplicationBackend
     public Task<PresentMonToolInspection> InspectPresentMonAsync(string path, CancellationToken ct) => Task.FromResult(new PresentMonToolInspection(path, Availability.ToolMissing, null, PresentMonCliStyle.Unsupported, "Fixture; no executable started", []));
     public Task<TechnicalResult> AnalyzePcAsync(DiagnosticOptions options, IProgress<TestProgress> progress, Action<TelemetryBatch> publishBatch, CancellationToken ct)
     {
+        LastAnalysisOptions = options;
         var now = DateTimeOffset.UtcNow;
         var inventory = new HardwareInventory(now, [], []);
         var samples = Enumerable.Range(0, 12).Select(i => new MetricSample("cpu.total.percent", "CPU", 20, "%", "fixture", "test-only",

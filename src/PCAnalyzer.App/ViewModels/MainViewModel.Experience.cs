@@ -54,6 +54,7 @@ public sealed partial class MainViewModel
     public AsyncCommand ExportAuditCommand { get; private set; } = null!;
     public RelayCommand OpenCategoryTestCommand { get; private set; } = null!;
     public RelayCommand OpenAuditReportCommand { get; private set; } = null!;
+    public RelayCommand PrepareAuditDetailsCommand { get; private set; } = null!;
 
     private void InitializeExperienceCommands()
     {
@@ -76,6 +77,10 @@ public sealed partial class MainViewModel
             if (_auditSettingsRun is not { } run) return;
             DisplayTestResult(run); Navigate("resultados");
         }, () => _auditSettingsRun is not null);
+        PrepareAuditDetailsCommand = new RelayCommand(() =>
+        {
+            if (_auditSettingsRun is { } run && run.Id != _openedTest?.Id) DisplayTestResult(run);
+        });
     }
 
     private void RequestAuditTest(string id)

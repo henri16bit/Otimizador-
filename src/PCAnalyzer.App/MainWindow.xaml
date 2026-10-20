@@ -188,7 +188,7 @@
                             <TextBlock Text="Próximas medições" Style="{StaticResource SectionTitle}"/>
                             <ItemsControl ItemsSource="{Binding RecommendedTests}" ItemTemplate="{StaticResource CompactTestRecommendationTemplate}"/>
                         </StackPanel>
-                        <Expander Header="Detalhes técnicos da análise" IsExpanded="False">
+                        <Expander Header="Detalhes técnicos da análise" IsExpanded="False" Expanded="OnAuditDetailsExpanded">
                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource TechnicalConsultationReportTemplate}" Margin="0,12,0,0"/>
                         </Expander>
                         <WrapPanel Margin="0,8,0,0"><Button Content="Exportar relatório…" Command="{Binding ExportAuditCommand}" Style="{StaticResource QuietButton}"/><Button Content="Histórico" Command="{Binding NavigateCommand}" CommandParameter="historico" Style="{StaticResource QuietButton}"/></WrapPanel>

@@ -10,6 +10,7 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private bool _canClose;
+    private void OnAuditDetailsExpanded(object sender, RoutedEventArgs args) => _viewModel.PrepareAuditDetailsCommand.Execute(null);
     public MainWindow(MainViewModel viewModel, bool initializeHardware = true)
     {
         _viewModel = viewModel;

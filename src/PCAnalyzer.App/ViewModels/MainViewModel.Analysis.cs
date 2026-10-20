@@ -108,7 +108,7 @@ public sealed partial class MainViewModel
 
     private void InitializeAnalysisCommands()
     {
-        AnalyzePcCommand = Command(() => StartAnalysisAsync(false));
+        AnalyzePcCommand = Command(() => StartAnalysisAsync(false, SelectedSection?.Id == "dashboard"));
         AuditConfigurationCommand = Command(() => RunTestAsync("audit.configuration", (progress, ct) => _backend.AuditConfigurationAsync(progress, ct)));
         AnalyzeGamesCommand = Command(() => StartAnalysisAsync(true));
         ConfigurePresentMonCommand = Command(ConfigurePresentMonAsync);
@@ -152,7 +152,7 @@ public sealed partial class MainViewModel
         PresentMonPath = tool.ExecutablePath;
         await SavePreferencesAsync();
     }
-    private async Task StartAnalysisAsync(bool gaming)
+    private async Task StartAnalysisAsync(bool gaming, bool passiveOnly = false)
     {
         int? pid = null;
         if (gaming)
@@ -167,14 +167,16 @@ public sealed partial class MainViewModel
             if (GameWaitSeconds is < 1 or > 300) throw new InvalidOperationException("O tempo de espera deve ficar entre 1 e 300 segundos.");
         }
         var seconds = gaming ? 30 : ObservationSeconds;
-        var options = new DiagnosticOptions(seconds, IncludePing, IncludeLatency, gaming,
+        var includePing = !passiveOnly && IncludePing;
+        var includeLatency = !passiveOnly && IncludeLatency;
+        var options = new DiagnosticOptions(seconds, includePing, includeLatency, gaming,
             PingHost.Trim(), SelectedAdapter?.Id, Workload, PresentMonPath, pid,
             gaming && pid is null ? GameWaitProcessName.Trim() : null, GameWaitSeconds);
         var explanation = $"Observar o uso atual por {seconds} segundos e salvar um relatório. Use o PC como de costume durante a análise.\n\nNenhum teste de carga ou ajuste de configuração será iniciado.";
-        if (IncludePing) explanation += "\n• Rede: enviar 20 pacotes ICMP para " + PingHost.Trim() + ".";
-        if (IncludeLatency) explanation += "\n• Drivers: captura ETW de 30 s, com confirmação UAC do Windows e possível custo adicional.";
+        if (includePing) explanation += "\n• Rede: enviar 20 pacotes ICMP para " + PingHost.Trim() + ".";
+        if (includeLatency) explanation += "\n• Drivers: captura ETW de 30 s, com confirmação UAC do Windows e possível custo adicional.";
         if (gaming) explanation += $"\n• Jogo: captura externa de quadros por 30 s. {(pid is { } p ? "PID " + p : "Aguardar " + GameWaitProcessName + " por até " + GameWaitSeconds + " s")}.";
-        if ((gaming || IncludePing || IncludeLatency) && !Confirm(gaming ? "Analisar durante o jogo" : "Confirmar testes opcionais", explanation + "\n\nIniciar análise?")) return;
+        if ((gaming || includePing || includeLatency) && !Confirm(gaming ? "Analisar durante o jogo" : "Confirmar testes opcionais", explanation + "\n\nIniciar análise?")) return;
         try
         {
             await RunTestAsync(gaming ? "gaming-analysis" : "general", (progress, ct) => _backend.AnalyzePcAsync(options, progress, batch =>

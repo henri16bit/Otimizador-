@@ -1,7 +1,7 @@
 <UserControl x:Class="PCAnalyzer.App.Controls.AuditSettingRow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Focusable="False" UseLayoutRounding="True" MouseLeftButtonUp="OnOpenDetails">
+ Foreground="{StaticResource Text}" Focusable="False" UseLayoutRounding="True" MouseLeftButtonUp="OnOpenDetails">
  <Border BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,0,1" Padding="10,11" Background="Transparent" Cursor="Hand">
   <Grid>
    <Grid.ColumnDefinitions>
@@ -12,11 +12,11 @@
     <ColumnDefinition Width="Auto"/>
    </Grid.ColumnDefinitions>
    <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
-    <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="19" MaxHeight="38" ToolTip="{Binding Name}"/>
+    <TextBlock Text="{Binding Name}" Foreground="{StaticResource Text}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="19" MaxHeight="38" ToolTip="{Binding Name}"/>
     <TextBlock Text="{Binding Description}" Foreground="{StaticResource Muted}" FontSize="13" TextWrapping="Wrap" LineHeight="18" MaxHeight="36" Margin="0,3,0,0" ToolTip="{Binding Description}"/>
    </StackPanel>
-   <TextBlock Grid.Column="1" Text="{Binding CurrentValue}" Margin="0,0,12,0" VerticalAlignment="Center" FontSize="14" TextWrapping="Wrap" LineHeight="20" MaxHeight="60" ToolTip="{Binding CurrentValue}"/>
-   <TextBlock Grid.Column="2" Text="{Binding RecommendedValue}" Margin="0,0,12,0" VerticalAlignment="Center" FontSize="14" TextWrapping="Wrap" LineHeight="20" MaxHeight="60" ToolTip="{Binding RecommendedValue}"/>
+   <TextBlock Grid.Column="1" Text="{Binding CurrentValue}" Foreground="{StaticResource Text}" Margin="0,0,12,0" VerticalAlignment="Center" FontSize="14" TextWrapping="Wrap" LineHeight="20" MaxHeight="60" ToolTip="{Binding CurrentValue}"/>
+   <TextBlock Grid.Column="2" Text="{Binding RecommendedValue}" Foreground="{StaticResource Text}" Margin="0,0,12,0" VerticalAlignment="Center" FontSize="14" TextWrapping="Wrap" LineHeight="20" MaxHeight="60" ToolTip="{Binding RecommendedValue}"/>
    <TextBlock Grid.Column="3" Text="{Binding StatusLabel}" Margin="0,0,10,0" VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap" LineHeight="19" MaxHeight="57">
     <TextBlock.Style>
      <Style TargetType="TextBlock">

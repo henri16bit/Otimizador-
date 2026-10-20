@@ -95,6 +95,7 @@ public sealed partial class MainViewModel
         {
             _networkDiscovered = true;
             _automaticNetworkInProgress = false;
+            Notify(nameof(CompactNetworkReadStatus));
             // A selection made while the previous read was pending is serviced after it ends.
             if (!_closing && SelectedAdapter?.Id != attempted)
                 _ = System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(EnsureNetworkLoaded));
