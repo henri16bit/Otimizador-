@@ -4,7 +4,29 @@
 
 Implementação incremental sobre `e133353`, preservando os coletores e os limites de somente leitura. Compilação Release com `-warnaserror` sem erros ou avisos e **404 testes C# aprovados**, zero falhas/ignorados (`artifacts/test-results/experience.trx`). As 16 fixtures PowerShell executam o script real de consulta com cmdlets substituídos; todas passaram, incluindo identidade ambígua, comando ausente, fonte sem suporte e falha real sem mascaramento.
 
-A publicação exige 40 cenários WPF, navegação nas dez categorias, 11 páginas internas e sete abas de ferramentas preservadas, abertura do pacote e verificação real no Windows. As novas regressões cobrem filtros, modal/teclado, lista com 1.100 itens virtualizados, contexto de resultados por categoria e dimensões lógicas equivalentes a 100%, 125% e 150%. A evidência remota será registrada por commit antes de declarar a versão publicada.
+A publicação atual exige 40 cenários WPF, navegação nas dez categorias, 11 páginas internas e sete abas de ferramentas preservadas, abertura do pacote e verificação real no Windows. As novas regressões cobrem filtros, modal/teclado, lista com 1.100 itens virtualizados, contexto de resultados por categoria e dimensões lógicas equivalentes a 100%, 125% e 150%.
+
+### Evidência remota já confirmada
+
+**v0.6.0-preview.1**, commit `5ebdfea4800ca9b08d797c9168c4c95c84ed4d7d`: [execução Windows](https://github.com/henri16bit/Otimizador-/actions/runs/39406735191), registrada em `refs/notes/pcanalyzer-releases`.
+
+- Restore com lockfiles e compilação sem avisos; **404/404 testes C#**, zero falhas/ignorados.
+- **39 cenários WPF** da suíte daquela versão; cinco verificações de empacotamento, cinco de publicação e 16 de rede PowerShell aprovadas.
+- Pacote abriu: dez categorias, 11 páginas internas e sete abas de ferramentas; layout compacto verificado.
+- Verificação passiva real no runner Windows aprovada. A auditoria coletou 802 observações, 683 disponíveis; campos de rede incluíram 27 erros de leitura e 43 estados sem suporte. Isso não demonstra compatibilidade de todos os campos com o driver do usuário.
+- ZIP publicado com 149.017.239 bytes e SHA256 `2bceb4b239069a8eea839c3662b07286d43a6a6a183ccb1af706ffd3ce62d8d2`.
+
+A inspeção das capturas dessa versão encontrou textos com contraste insuficiente na explicação e no botão principal, apesar dos testes aprovados. A preview.1 **não representa a conclusão da revisão visual**.
+
+### Correções finais e publicação pendente
+
+O commit `c51f020e513e830cd40dcb8058955d1171da0827`, enviado com a tag **v0.6.0-preview.2** na etapa anterior, corrige contraste, preservação do contexto da auditoria e estado de leitura da rede. A análise pelo Início ignora opções de testes manuais previamente selecionadas. A suíte passou a exigir 40 cenários, incluindo conteúdo efetivamente renderizado e verificações de contraste.
+
+A continuação para **v0.6.0-preview.3** aplica explicitamente o estilo de janela à `MainWindow` e verifica fonte mínima no botão principal. A compilação Release dessa correção foi executada novamente com `-warnaserror`: zero erros e avisos. Os testes C# anteriores permanecem evidência da lógica preservada; o teste WPF alterado ainda precisa executar no Windows.
+
+Nesta retomada, a leitura Git HTTPS falhou por autenticação ausente; a tentativa com a credencial disponível também foi recusada pelo GitHub. A API respondeu com bloqueio de rede HTTP 403. Por isso, **o resultado Windows da preview.2 não foi recuperado e a correção preview.3 ainda não foi enviada nem publicada**. Não foram substituídas tags ou evidências anteriores.
+
+Para concluir, restabelecer a integração GitHub, recuperar as notas da preview.2, investigar eventual falha, enviar a correção e uma nova tag, exigir todas as etapas da publicação e inspecionar as capturas finais do início, modal, lista a 150% lógico e resultado de rede. Só então registrar aqui o commit, execução, ZIP e hash finais. Aceitação em DPI físico e no hardware alvo continua separada.
 
 Arquivos, componentes e limites: [AUDIT-EXPERIENCE.md](AUDIT-EXPERIENCE.md). Os registros abaixo pertencem às versões anteriores.
 

@@ -240,7 +240,7 @@ internal static class Program
         var confirmations = _confirmationCalls;
         window.UpdateLayout();
         var primary = Descendants<Button>(window).Single(b => ReferenceEquals(b.Command, vm.AnalyzePcCommand));
-        Require(Descendants<TextBlock>(primary).Any(t => t.Text == "ANALISAR MEU PC" && Contrast(t.Foreground, primary.Background) >= 4.5),
+        Require(window.FontSize >= 14 && Descendants<TextBlock>(primary).Any(t => t.Text == "ANALISAR MEU PC" && t.FontSize >= 14 && Contrast(t.Foreground, primary.Background) >= 4.5),
             "The main action must render its label with readable contrast.");
         vm.IncludePing = true; vm.IncludeLatency = true;
         vm.AnalyzePcCommand.Execute(null);

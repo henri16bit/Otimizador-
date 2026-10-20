@@ -1,4 +1,4 @@
-# PC Performance Analyzer v0.6.0-preview.2
+# PC Performance Analyzer v0.6.0-preview.3
 
 **ANALISAR MEU PC → escolher uma categoria → comparar atual e recomendação → abrir a explicação → medir quando necessário.** A auditoria existente ganha uma interface compacta, com dados reais e sem alterações nas configurações do computador.
 
@@ -10,6 +10,7 @@
 - Rede distingue falta de permissão, comando ausente, consulta não suportada e falha de leitura. Valores vazios e funções de energia não suportadas não aparecem como medições bem-sucedidas. A identificação por GUID mantém a proteção contra associar dados ao adaptador errado.
 - Resultados de rede, memória, armazenamento e jogos aparecem na seção correspondente, com estado, unidades e detalhes recolhidos. Latência separa DPC/ISR, frametime, RTT e acesso à memória; não calcula input lag total.
 - Histórico, exportações, comparações, coletores, importações ETL/CSV, captura manual e ferramentas avançadas foram preservados. Aplicação e restauração de ajustes continuam bloqueadas na interface, API e auxiliar.
+- Corrigidos contraste do botão principal e dos textos da explicação, aplicação da fonte da janela, preservação do relatório de auditoria após testes manuais e atualização do estado de leitura da rede. A análise pelo Início permanece passiva mesmo quando opções de testes foram marcadas anteriormente em Avançado.
 
 Baixe **PCAnalyzer-windows-x64.zip** em **Assets**. Os arquivos “Source code” contêm apenas código-fonte.
 
