@@ -1,0 +1,38 @@
+{
+  "tag": "v0.6.0-preview.4",
+  "timestamp": "2026-10-20T16:58:23.1777754+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/39461785782",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "network_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "ui_flows": "failure",
+    "hardware": "skipped",
+    "package": "skipped",
+    "smoke": "skipped",
+    "publish": "skipped"
+  },
+  "uiFlows": {
+    "success": false,
+    "error": "System.InvalidOperationException: Capture clipped an edge at 0,0 when the visual had layout offset 17,13.\r\n   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 495\r\n   at PCAnalyzer.WpfHarness.Program.VerifyCaptureViewport() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 477\r\n   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 62\r\n   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass2_0.<<Main>b__1>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 41"
+  },
+  "tests": {
+    "failed": 0,
+    "notExecuted": 0,
+    "passed": 404,
+    "total": 404
+  },
+  "failedTests": [],
+  "uiFlowstdout": [],
+  "uiFlowstderr": [
+    "System.InvalidOperationException: Capture clipped an edge at 0,0 when the visual had layout offset 17,13.",
+    "   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 495",
+    "   at PCAnalyzer.WpfHarness.Program.VerifyCaptureViewport() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 477",
+    "   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 62",
+    "   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass2_0.<<Main>b__1>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 41"
+  ]
+}
