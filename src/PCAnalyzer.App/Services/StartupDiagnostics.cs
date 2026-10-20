@@ -32,8 +32,22 @@ internal sealed class StartupDiagnostics
     {
         var path = Path.GetFullPath(Path.ChangeExtension(_smokeOutput, null) + "-" + name + ".png");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(element.ActualWidth), (int)Math.Ceiling(element.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(element);
+        var bounds = new Rect(0, 0, element.ActualWidth, element.ActualHeight);
+        // Render the element's local viewport. Rendering it directly retains its layout
+        // offset (for example a modal's margin), shifting and clipping the PNG.
+        var brush = new VisualBrush(element)
+        {
+            AutoLayoutContent = false,
+            ViewboxUnits = BrushMappingMode.Absolute,
+            Viewbox = bounds,
+            ViewportUnits = BrushMappingMode.Absolute,
+            Viewport = bounds,
+            Stretch = Stretch.Fill
+        };
+        var visual = new DrawingVisual();
+        using (var drawing = visual.RenderOpen()) drawing.DrawRectangle(brush, null, bounds);
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(bounds.Width), (int)Math.Ceiling(bounds.Height), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);
         encoder.Save(stream);

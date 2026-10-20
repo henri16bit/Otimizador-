@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using PCAnalyzer.App.Controls;
 using PCAnalyzer.App;
 using PCAnalyzer.App.Services;
@@ -46,7 +47,8 @@ internal static class Program
                         "general result on same page", "audit command and same-page coverage", "audit SQLite history reopen", "read-only consultation without apply controls", "audit cancellation and failure clear stale conclusions",
                         "audit partial state and export", "cancelled audit retains only newly collected evidence", "audit layouts at requested viewports", "memory access test is discoverable and manual", "category filters search and ordering", "large audit list virtualizes containers",
                         "compact rows hide technical identities", "detail modal closes with keyboard and preserves context", "priority recommendations exclude disabled and ignored entries",
-                        "manual network result remains in its category and preserves audit", "simulated 100 125 and 150 percent layouts", "one-click passive analysis needs no confirmation", "rendered setting and modal values meet contrast checks" },
+                        "manual network result remains in its category and preserves audit", "simulated 100 125 and 150 percent layouts", "one-click passive analysis needs no confirmation", "rendered setting and modal values meet contrast checks",
+                        "visual captures preserve the complete viewport despite layout offsets" },
                     fixtureDataOnly = true, hardwareOrConfigurationChanged = false }));
                 _exitCode = 0;
             }
@@ -57,6 +59,7 @@ internal static class Program
     }
     private static async Task RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend)
     {
+        VerifyCaptureViewport();
         await backend.SaveTestAsync(new(Guid.NewGuid(), "ping", "Interrupted fixture", TestStatus.Running,
             DateTimeOffset.UtcNow.AddDays(-1), null, new("Fixture interrupted")));
         var initialization = vm.InitializeAsync();
@@ -451,6 +454,30 @@ internal static class Program
             facts: new Dictionary<string, string> { ["Capacity"] = "8589934592", ["ConfiguredTransferRateMTs"] = "2933" });
         Add("nvidia.fixture", "game-fixture", "VALORANT fixture", AuditClassification.AppliedUnproven);
         return new(DateTimeOffset.UtcNow, "Dados sintéticos somente para validar a interface.", rows, ["Fixture; no hardware accessed"]);
+    }
+
+    private static void VerifyCaptureViewport()
+    {
+        var canvas = new Canvas { Width = 120, Height = 100 };
+        var panel = new Border { Width = 64, Height = 48, Background = Brushes.Red };
+        canvas.Children.Add(panel);
+        foreach (var offset in new[] { new Point(17, 13), new Point(-9, -7) })
+        {
+            Canvas.SetLeft(panel, offset.X); Canvas.SetTop(panel, offset.Y);
+            canvas.Measure(new Size(120, 100)); canvas.Arrange(new Rect(0, 0, 120, 100)); canvas.UpdateLayout();
+            new StartupDiagnostics(["--smoke-output", "artifacts/ui-capture.json"]).CaptureView(panel, "offset");
+            using var file = File.OpenRead("artifacts/ui-capture-offset.png");
+            var frame = BitmapDecoder.Create(file, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+            var pixels = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+            Require(pixels.PixelWidth == 64 && pixels.PixelHeight == 48, "Capture changed the element viewport size.");
+            foreach (var point in new[] { new Point(0, 0), new Point(63, 0), new Point(0, 47), new Point(63, 47) })
+            {
+                var pixel = new byte[4];
+                pixels.CopyPixels(new Int32Rect((int)point.X, (int)point.Y, 1, 1), pixel, 4, 0);
+                Require(pixel.SequenceEqual(new byte[] { 0, 0, 255, 255 }),
+                    $"Capture clipped an edge at {point} when the visual had layout offset {offset}.");
+            }
+        }
     }
 
     private static Task RunFixture(MainViewModel vm, string id, Func<IProgress<TestProgress>, CancellationToken, Task<TechnicalResult>> run)

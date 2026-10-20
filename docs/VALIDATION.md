@@ -4,7 +4,7 @@
 
 Implementação incremental sobre `e133353`, preservando os coletores e os limites de somente leitura. Compilação Release com `-warnaserror` sem erros ou avisos e **404 testes C# aprovados**, zero falhas/ignorados (`artifacts/test-results/experience.trx`). As 16 fixtures PowerShell executam o script real de consulta com cmdlets substituídos; todas passaram, incluindo identidade ambígua, comando ausente, fonte sem suporte e falha real sem mascaramento.
 
-A publicação atual exige 40 cenários WPF, navegação nas dez categorias, 11 páginas internas e sete abas de ferramentas preservadas, abertura do pacote e verificação real no Windows. As novas regressões cobrem filtros, modal/teclado, lista com 1.100 itens virtualizados, contexto de resultados por categoria e dimensões lógicas equivalentes a 100%, 125% e 150%.
+A publicação atual exige 41 cenários WPF, navegação nas dez categorias, 11 páginas internas e sete abas de ferramentas preservadas, abertura do pacote e verificação real no Windows. As novas regressões cobrem filtros, modal/teclado, lista com 1.100 itens virtualizados, contexto de resultados por categoria e dimensões lógicas equivalentes a 100%, 125% e 150%. A captura também verifica pixels dos quatro cantos de um elemento com deslocamentos positivos e negativos, para detectar corte causado pelo próprio gerador de imagens.
 
 ### Evidência remota já confirmada
 
@@ -20,13 +20,13 @@ A inspeção das capturas dessa versão encontrou textos com contraste insuficie
 
 ### Correções finais e publicação pendente
 
-O commit `c51f020e513e830cd40dcb8058955d1171da0827`, enviado com a tag **v0.6.0-preview.2** na etapa anterior, corrige contraste, preservação do contexto da auditoria e estado de leitura da rede. A análise pelo Início ignora opções de testes manuais previamente selecionadas. A suíte passou a exigir 40 cenários, incluindo conteúdo efetivamente renderizado e verificações de contraste.
+O commit `c51f020e513e830cd40dcb8058955d1171da0827`, enviado com a tag **v0.6.0-preview.2**, corrige contraste, preservação do contexto da auditoria e estado de leitura da rede. A análise pelo Início ignora opções de testes manuais previamente selecionadas. A [execução Windows](https://github.com/henri16bit/Otimizador-/actions/runs/39407757168) passou em todas as etapas, incluindo 404 testes C# e 40 cenários WPF, e publicou o ZIP.
 
-A continuação para **v0.6.0-preview.3** aplica explicitamente o estilo de janela à `MainWindow` e verifica fonte mínima no botão principal. A compilação Release dessa correção foi executada novamente com `-warnaserror`: zero erros e avisos. Os testes C# anteriores permanecem evidência da lógica preservada; o teste WPF alterado ainda precisa executar no Windows.
+A **v0.6.0-preview.3**, commit `071f49f28538ea366da4e175ba7d2887bad1d037`, aplica explicitamente o estilo de janela à `MainWindow` e verifica fonte mínima no botão principal. A compilação Release dessa correção foi executada novamente com `-warnaserror`: zero erros e avisos. O commit foi enviado ao `main` e a nova tag foi enviada após o restabelecimento da autenticação GitHub.
 
-Nesta retomada, a leitura Git HTTPS falhou por autenticação ausente; a tentativa com a credencial disponível também foi recusada pelo GitHub. A API respondeu com bloqueio de rede HTTP 403. Por isso, **o resultado Windows da preview.2 não foi recuperado e a correção preview.3 ainda não foi enviada nem publicada**. Não foram substituídas tags ou evidências anteriores.
+Ao revisar as capturas da preview.2, foi identificado um defeito no gerador de imagens: o bitmap mantinha a margem/deslocamento de layout do elemento, cortando o fim do viewport. A **v0.6.0-preview.4** corrige somente essa captura, desenhando a área local do elemento na origem. A regressão verifica dimensões e pixels dos quatro cantos com offsets positivos e negativos; os clips internos da interface são preservados. Isso não modifica o layout do produto nem os coletores.
 
-Para concluir, restabelecer a integração GitHub, recuperar as notas da preview.2, investigar eventual falha, enviar a correção e uma nova tag, exigir todas as etapas da publicação e inspecionar as capturas finais do início, modal, lista a 150% lógico e resultado de rede. Só então registrar aqui o commit, execução, ZIP e hash finais. Aceitação em DPI físico e no hardware alvo continua separada.
+Para concluir, exigir todas as etapas da publicação final e inspecionar as capturas completas do início, modal, lista a 150% lógico e resultado de rede. Só então registrar aqui o commit, execução, ZIP e hash finais. Aceitação em DPI físico e no hardware alvo continua separada.
 
 Arquivos, componentes e limites: [AUDIT-EXPERIENCE.md](AUDIT-EXPERIENCE.md). Os registros abaixo pertencem às versões anteriores.
 
