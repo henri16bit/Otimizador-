@@ -231,6 +231,7 @@ public sealed partial class ApplicationBackend : IApplicationBackend
         var lines = new List<string> { result.Status + ": " + result.Detail,
             $"Duração={result.Duration.TotalSeconds:F2} s; eventos vistos={result.EventsSeen}; perdidos={result.EventsLost}; cancelado={result.Cancelled}; limite={result.LimitReached}",
             "DPC/ISR mede execução no kernel; não mede input lag físico e picos isolados não comprovam defeito." };
+        lines.AddRange(LatencyResultPresentation.Details(result));
         foreach (var group in result.CpuSummaries.Concat(result.ModuleSummaries))
             lines.Add($"CPU={group.Cpu}; {group.Kind}; módulo={group.Module ?? "não atribuído"}; n={group.Count}; média={group.MeanMicroseconds:F3} µs; máximo={group.MaximumMicroseconds:F3} µs; p95/p99={N(group.P95Microseconds)}/{N(group.P99Microseconds)} µs; n percentis={group.PercentileSampleCount}");
         if (result.Timeline is { } timeline)
@@ -248,15 +249,7 @@ public sealed partial class ApplicationBackend : IApplicationBackend
             .Select(group => new RelativeSeries(group.Key + " · duração por evento", "µs",
                 group.TakeLast(10_000).Select(e => new RelativePoint(e.TraceRelativeMilliseconds!.Value, e.DurationMicroseconds)).ToArray(),
                 result.TimelineTimeBasis, "Kernel ETW / TraceEvent; ordem temporal original, eventos individuais")).ToArray();
-        return new("DPC/ISR — captura real", lines, metrics, series,
-            [new("etw.total.events", "Eventos ETW recebidos", result.EventsSeen, "eventos", "Total de todos os tipos, incluindo auxiliares"),
-             new("dpc.events", "Eventos DPC recebidos", result.EventCounts?.DpcEvents, "eventos", "DPC decodificados; consulte rejeitados e usados"),
-             new("isr.events", "Eventos ISR recebidos", result.EventCounts?.IsrEvents, "eventos", "ISR decodificados; consulte rejeitados e usados"),
-             new("etw.auxiliary.events", "Eventos auxiliares", result.EventCounts?.AuxiliaryEvents, "eventos", "Imagens e outros eventos que não são DPC/ISR"),
-             new("etw.rejected.events", "DPC/ISR incompletos", result.EventCounts?.RejectedLatencyEvents, "eventos", "Rejeitados por campos inválidos; não usados nas durações"),
-             new("etw.analyzed.events", "DPC/ISR analisados", result.EventCounts?.AnalyzedLatencyEvents, "eventos", "Eventos válidos usados nos agregados"),
-             new("dpc.lost.events", "Eventos perdidos", result.EventsLost, "eventos", "Perdas tornam a cobertura parcial"),
-             new("dpc.maximum.us", "Maior duração retida", result.CpuSummaries.Count > 0 ? result.CpuSummaries.Max(s => s.MaximumMicroseconds) : null, "µs", "Não representa input lag físico")],
+        return new("DPC/ISR — captura real", lines, metrics, series, LatencyResultPresentation.Indicators(result),
             LatencyInterpretation.Analyze(result), result.Limitations, result.Status, result.Cancelled, ComparisonKey: "kernel-etw:dpc-isr",
             Partial: result.EventsLost > 0 || result.LimitReached || result.TimelineTruncated || result.EventCounts?.RejectedLatencyEvents > 0);
     }

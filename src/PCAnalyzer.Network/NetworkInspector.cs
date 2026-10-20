@@ -114,19 +114,29 @@ public sealed class NetworkInspector : INetworkPropertyAccess
         try
         {
             using var json = await RunNetAdapterAsync(new { Action = "Tcp" }, cancellationToken);
-            return ReadArray(json.RootElement, "Tcp").SelectMany(profile =>
-            {
-                var name = ReadString(profile, "SettingName") ?? "Perfil sem nome";
-                return profile.EnumerateObject().Where(p => p.Name != "SettingName").Select(p => new HardwareFact(
-                    name + " · " + p.Name, p.Value.ValueKind == JsonValueKind.Null ? null : p.Value.ToString(), "Get-NetTCPSetting",
-                    p.Value.ValueKind == JsonValueKind.Null ? Availability.Unsupported : Availability.Available,
-                    "Perfil TCP disponível; não comprova qual perfil uma conexão usa. UDP de jogos não usa esses ajustes TCP."));
-            }).ToArray();
+            return ParseTcp(json.RootElement);
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or JsonException or TimeoutException or Win32Exception or UnauthorizedAccessException)
         {
             return [new("Perfis TCP", null, "Get-NetTCPSetting", ErrorStatus(ex), PublicError(ex))];
         }
+    }
+
+    internal static IReadOnlyList<HardwareFact> ParseTcp(JsonElement root)
+    {
+        var profiles = ReadArray(root, "Tcp").Where(p => p.ValueKind == JsonValueKind.Object).ToArray();
+        if (profiles.Length == 0)
+            return [new("Perfis TCP", null, "Get-NetTCPSetting", Availability.InsufficientData, "Nenhum perfil TCP foi retornado pela consulta.")];
+        var facts = profiles.SelectMany(profile =>
+        {
+            var name = ReadString(profile, "SettingName") ?? "Perfil sem nome";
+            return profile.EnumerateObject().Where(p => p.Name != "SettingName").Select(p => new HardwareFact(
+                name + " · " + p.Name, HasValue(p.Value) ? p.Value.ToString() : null, "Get-NetTCPSetting",
+                HasValue(p.Value) ? Availability.Available : Availability.Unsupported,
+                "Perfil TCP disponível; não comprova qual perfil uma conexão usa. UDP de jogos não usa esses ajustes TCP."));
+        }).ToArray();
+        return facts.Length > 0 ? facts :
+            [new("Perfis TCP", null, "Get-NetTCPSetting", Availability.InsufficientData, "Os perfis retornados não contêm campos de configuração.")];
     }
 
     public async Task<NetworkProperty> GetPropertyAsync(Guid interfaceGuid, string registryKeyword,
@@ -180,9 +190,32 @@ public sealed class NetworkInspector : INetworkPropertyAccess
                 Enum.TryParse<Availability>(ReadString(states, name), out var status) ? status : Availability.Unsupported;
             return [new(name, null, source, state, "Esta fonte não retornou dados; consulte as limitações da conexão.")];
         }
-        return obj.EnumerateObject().Select(p => new HardwareFact(p.Name,
-            p.Value.ValueKind == JsonValueKind.Null || string.IsNullOrWhiteSpace(p.Value.ToString()) ? null : p.Value.ToString(), source,
-            p.Value.ValueKind == JsonValueKind.Null || string.IsNullOrWhiteSpace(p.Value.ToString()) ? Availability.Unsupported : Availability.Available)).ToArray();
+        return obj.EnumerateObject().Select(p =>
+        {
+            // NetAdapterPowerManagement uses the literal enum value Unsupported. It is a real
+            // capability answer, not an enabled setting or evidence of a successful measurement.
+            var unsupported = name == "Power" && p.Value.ValueKind == JsonValueKind.String &&
+                string.Equals(p.Value.GetString(), "Unsupported", StringComparison.OrdinalIgnoreCase);
+            return new HardwareFact(p.Name, HasValue(p.Value) ? p.Value.ToString() : null, source,
+                HasValue(p.Value) && !unsupported ? Availability.Available : Availability.Unsupported,
+                unsupported ? "O driver informa que esta função de energia não é suportada." : null);
+        }).ToArray();
+    }
+
+    private static bool HasValue(JsonElement value) => value.ValueKind != JsonValueKind.Null && !string.IsNullOrWhiteSpace(value.ToString());
+
+    internal static Availability ReadFailureStatus(string output)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(output);
+            if (json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.TryGetProperty("Error", out var error) && error.ValueKind == JsonValueKind.Object &&
+                Enum.TryParse<Availability>(ReadString(error, "Status"), out var status) &&
+                status is Availability.ToolMissing or Availability.Unsupported or Availability.PermissionRequired)
+                return status;
+        }
+        catch (JsonException) { }
+        return Availability.ReadError;
     }
 
     private static async Task<JsonDocument> RunNetAdapterAsync(object request, CancellationToken cancellationToken)
@@ -216,11 +249,14 @@ public sealed class NetworkInspector : INetworkPropertyAccess
             if (!string.IsNullOrWhiteSpace(errors)) PowerShellErrorText.Log(errors);
             if (process.ExitCode != 0)
             {
-                var normalized = PowerShellErrorText.Read(errors);
-                var denied = normalized.Contains("Access", StringComparison.OrdinalIgnoreCase) || normalized.Contains("Acesso", StringComparison.OrdinalIgnoreCase);
-                throw new NetworkReadException(denied ? Availability.PermissionRequired : Availability.ReadError,
-                    denied ? "O Windows negou acesso à consulta de rede. Nenhuma elevação foi iniciada."
-                    : "Não foi possível consultar o driver desta conexão. Atualize a lista; detalhes estão no log de rede.");
+                var status = ReadFailureStatus(output);
+                throw new NetworkReadException(status, status switch
+                {
+                    Availability.PermissionRequired => "O Windows negou acesso à consulta de rede. Nenhuma elevação foi iniciada.",
+                    Availability.ToolMissing => "O comando de consulta de rede não está disponível neste Windows.",
+                    Availability.Unsupported => "O provedor ou driver não oferece esta consulta de rede.",
+                    _ => "Não foi possível consultar o driver desta conexão. Atualize a lista; detalhes estão no log de rede."
+                });
             }
             return JsonDocument.Parse(output);
         }
@@ -260,6 +296,23 @@ public sealed class NetworkInspector : INetworkPropertyAccess
         $ProgressPreference = 'SilentlyContinue'
         [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
         [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+        function Get-ReadFailureStatus($failure) {
+          $exception = $failure.Exception
+          $base = $exception.GetBaseException()
+          if ($exception -is [System.Management.Automation.CommandNotFoundException] -or
+              $base -is [System.Management.Automation.CommandNotFoundException]) { return 'ToolMissing' }
+          $native = if ($base.PSObject.Properties['NativeErrorCode']) { [string]$base.NativeErrorCode } else { '' }
+          if ($failure.CategoryInfo.Category -eq 'PermissionDenied' -or $base -is [System.UnauthorizedAccessException] -or
+              $native -eq 'AccessDenied') { return 'PermissionRequired' }
+          if ($failure.CategoryInfo.Category -eq 'NotImplemented' -or $base -is [System.NotSupportedException] -or
+              $base -is [System.NotImplementedException] -or $native -eq 'NotSupported') { return 'Unsupported' }
+          # Older CIM providers sometimes return only a localized message. Restrict this fallback
+          # to explicit permission/support phrases; other read failures remain failures.
+          $detail = [string]$exception.Message
+          if ($detail -match 'access (is )?denied|acesso (foi )?negado') { return 'PermissionRequired' }
+          if ($detail -match 'not supported|não suportad') { return 'Unsupported' }
+          return 'ReadError'
+        }
         try {
           $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
           if ($request.Action -ceq 'Tcp') {
@@ -305,11 +358,7 @@ public sealed class NetworkInspector : INetworkPropertyAccess
             $limits = New-Object 'System.Collections.Generic.List[string]'
             $statuses = @{}
             function Read-Failed([string]$section, $failure) {
-              $detail = [string]$failure.Exception.Message
-              $state = if ($failure.CategoryInfo.Category -eq 'PermissionDenied' -or $detail -match 'access|acesso') { 'PermissionRequired' }
-                elseif ($failure.CategoryInfo.Category -eq 'NotImplemented' -or $detail -match 'not supported|não suportad') { 'Unsupported' }
-                else { 'ReadError' }
-              $statuses[$section] = $state
+              $statuses[$section] = Get-ReadFailureStatus $failure
               $limits.Add($section + ': leitura não disponível; o motivo técnico está no log de rede.')
               [Console]::Error.WriteLine($section + ': ' + [string]$failure)
             }
@@ -354,6 +403,7 @@ public sealed class NetworkInspector : INetworkPropertyAccess
           } else { throw 'Unsupported action.' }
         } catch {
           [Console]::Error.WriteLine($_.Exception.Message)
+          @{ Error = @{ Status = (Get-ReadFailureStatus $_) } } | ConvertTo-Json -Depth 3 -Compress
           exit 1
         }
         """;

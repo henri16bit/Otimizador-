@@ -11,6 +11,7 @@ param([string]$Scenario)
 $fixtureInterfaceId = 'd9016897-a8ca-4275-abaa-5c2a1e439366'
 function Get-NetAdapter {
   param([switch]$IncludeHidden)
+  if ($Scenario -eq 'adapter-command-missing') { PCAnalyzerFixtureMissingNetAdapterCommand; return }
   $guid = '{' + $fixtureInterfaceId.ToUpperInvariant() + '}'
   if ($Scenario -in @('fallback', 'missing-legacy')) { $guid = $null }
   if ($Scenario -eq 'contradictory-guid') { $guid = '7102bd1b-9888-4f80-a590-291695c39253' }
@@ -42,6 +43,9 @@ function Get-NetAdapterAdvancedProperty {
 function Get-NetAdapterRss {
   param([string]$Name, [switch]$IncludeHidden)
   Assert-LiteralName $Name
+  if ($Scenario -eq 'rss-command-missing') { PCAnalyzerFixtureMissingRssCommand; return }
+  if ($Scenario -eq 'rss-unsupported') { throw [System.NotSupportedException]::new('This provider does not expose RSS.') }
+  if ($Scenario -eq 'rss-read-error') { throw [System.InvalidOperationException]::new('Failed to access RSS data because the provider response was malformed.') }
   [pscustomobject]@{ Enabled=$false; NumberOfReceiveQueues=2; BaseProcessorGroup=0; BaseProcessorNumber=2; RssProcessorArray=@('0:2') }
 }
 function Get-NetAdapterStatistics {
@@ -55,6 +59,10 @@ function Get-NetAdapterPowerManagement {
   [pscustomobject]@{ SelectiveSuspend='Unsupported'; WakeOnMagicPacket='Enabled' }
 }
 function Get-NetTCPSetting {
+  if ($Scenario -eq 'tcp-command-missing') { PCAnalyzerFixtureMissingTcpCommand; return }
+  if ($Scenario -eq 'tcp-unsupported') { throw [System.NotSupportedException]::new('This provider does not expose TCP settings.') }
+  if ($Scenario -eq 'tcp-denied') { throw [System.UnauthorizedAccessException]::new('Access denied in fixture.') }
+  if ($Scenario -eq 'tcp-read-error') { throw [System.InvalidOperationException]::new('The TCP provider returned malformed data.') }
   [pscustomobject]@{ SettingName='Internet'; AutoTuningLevelLocal='Normal'; CongestionProvider='CUBIC'; EcnCapability='Disabled' }
 }
 '@
@@ -87,6 +95,7 @@ try {
     $data = $result.Output | ConvertFrom-Json
     if ($data.Identity.InterfaceGuid -ne 'd9016897-a8ca-4275-abaa-5c2a1e439366') { throw 'Wrong identity returned.' }
     if ($data.Statistics.ReceivedBytes -ne 0 -or $null -ne $data.Statistics.ReceivedPacketErrors) { throw 'Missing and zero counters were conflated.' }
+    if ($data.Power.SelectiveSuspend -ne 'Unsupported' -or $data.Identity.HardwareInterface -ne $true) { throw 'Adapter capability data was lost.' }
     if ($scenario -eq 'fallback' -and $data.Identity.Mapping -ne 'GUID Win32 + índice + PnP verificados') { throw 'Fallback did not validate its identities.' }
     if ($scenario -eq 'partial') {
       if ($data.Statuses.Properties -ne 'PermissionRequired' -or $data.Properties.Count -ne 0 -or -not $data.Limitations) { throw 'Partial-query failure was hidden.' }
@@ -95,7 +104,30 @@ try {
   }
   foreach ($scenario in @('contradictory-guid', 'duplicate-guid', 'duplicate-name', 'missing-legacy')) {
     $result = Invoke-Fixture $scenario
-    if ($result.ExitCode -eq 0 -or $result.Output.Trim().Length -gt 0) { throw "$scenario must reject ambiguous identity without returning properties." }
+    $data = $result.Output | ConvertFrom-Json
+    if ($result.ExitCode -eq 0 -or $data.Error.Status -ne 'ReadError' -or $data.PSObject.Properties['Properties'] -or $data.PSObject.Properties['Identity']) {
+      throw "$scenario must reject ambiguous identity without returning adapter data."
+    }
+    $checks++
+  }
+  foreach ($scenario in @('rss-command-missing', 'rss-unsupported', 'rss-read-error')) {
+    $result = Invoke-Fixture $scenario
+    if ($result.ExitCode -ne 0) { throw "${scenario}: $($result.Error)" }
+    $data = $result.Output | ConvertFrom-Json
+    $expected = @{ 'rss-command-missing'='ToolMissing'; 'rss-unsupported'='Unsupported'; 'rss-read-error'='ReadError' }[$scenario]
+    if ($data.Statuses.Rss -ne $expected -or $null -ne $data.Rss -or -not $data.Limitations -or $data.Properties[0].RegistryKeyword -ne '*RSS') {
+      throw "${scenario}: the failure must retain its specific state and preserve other driver readings."
+    }
+    $checks++
+  }
+  foreach ($scenario in @('adapter-command-missing', 'tcp-command-missing', 'tcp-unsupported', 'tcp-denied', 'tcp-read-error')) {
+    $action = if ($scenario -eq 'adapter-command-missing') { 'Inspect' } else { 'Tcp' }
+    $result = Invoke-Fixture $scenario $action
+    $data = $result.Output | ConvertFrom-Json
+    $expected = @{ 'adapter-command-missing'='ToolMissing'; 'tcp-command-missing'='ToolMissing'; 'tcp-unsupported'='Unsupported'; 'tcp-denied'='PermissionRequired'; 'tcp-read-error'='ReadError' }[$scenario]
+    if ($result.ExitCode -eq 0 -or $data.Error.Status -ne $expected -or $data.PSObject.Properties['Tcp'] -or $data.PSObject.Properties['Properties']) {
+      throw "${scenario}: a failed query must return the exact error state without settings."
+    }
     $checks++
   }
   $result = Invoke-Fixture 'tcp' 'Tcp'

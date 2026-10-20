@@ -62,14 +62,13 @@ public sealed class NetworkConfigurationAuditProvider : IPerformanceAuditProvide
             {
                 ["presence"] = "present", ["configured"] = "false", ["effective"] = "Estado da interface informado pela API: " + adapter.Status,
                 ["InterfaceGuid"] = id, ["DriverVersion"] = detail.DriverVersion ?? "não informado",
-                ["DriverDate"] = detail.DriverDate ?? "não informado", ["SpeedBitsPerSecond"] = adapter.SpeedBitsPerSecond?.ToString(CultureInfo.InvariantCulture) ?? "não informado",
-                ["HardwareInterface"] = detail.Identity?.FirstOrDefault(f => f.Name == "HardwareInterface")?.Value ?? "não informado"
+                ["DriverDate"] = detail.DriverDate ?? "não informado", ["SpeedBitsPerSecond"] = adapter.SpeedBitsPerSecond?.ToString(CultureInfo.InvariantCulture) ?? "não informado"
             }, detail.Limitations.Count == 0 ? "A identidade não comprova qualidade ou latência da conexão." : string.Join(" ", detail.Limitations)));
         if (detail.Status != Availability.Available)
         {
             foreach (var rule in new[] { "network.advanced", "network.rss", "network.power", "network.statistics" })
                 result.Add(Missing(rule, "Leitura do driver", scope, detail.Status, string.Join(" ", detail.Limitations), id));
-            return result;
+            return WithAdapterContext(result, adapter, detail);
         }
         foreach (var property in detail.AdvancedProperties)
         {
@@ -92,7 +91,28 @@ public sealed class NetworkConfigurationAuditProvider : IPerformanceAuditProvide
         result.AddRange(FromFacts("network.rss", id, scope, detail.Rss, true));
         result.AddRange(FromFacts("network.power", id, scope, detail.PowerManagement ?? [], true));
         result.AddRange(FromFacts("network.statistics", id, scope, detail.Statistics, false));
-        return result;
+        return WithAdapterContext(result, adapter, detail);
+    }
+
+    private static IReadOnlyList<AuditObservation> WithAdapterContext(IEnumerable<AuditObservation> observations,
+        NetworkAdapter adapter, AdapterDetail detail)
+    {
+        // Every row retains its adapter context so the presentation can group physical connections
+        // and place virtual interfaces in details without guessing from names or driver keywords.
+        var physical = detail.Identity?.FirstOrDefault(f => f.Name == "HardwareInterface" && f.Status == Availability.Available)?.Value;
+        var hardwareInterface = bool.TryParse(physical, out var isHardware) ? isHardware.ToString() : "não informado";
+        return observations.Select(observation => observation with
+        {
+            Facts = new Dictionary<string, string>(observation.Facts)
+            {
+                ["InterfaceGuid"] = adapter.InterfaceGuid.ToString("D"),
+                ["HardwareInterface"] = hardwareInterface,
+                ["AdapterStatus"] = adapter.Status,
+                ["AdapterType"] = adapter.Type,
+                ["HasGateway"] = adapter.Gateways.Any(value => System.Net.IPAddress.TryParse(value, out var address) &&
+                    !address.Equals(System.Net.IPAddress.Any) && !address.Equals(System.Net.IPAddress.IPv6Any)) ? "true" : "false"
+            }
+        }).ToArray();
     }
 
     private static IEnumerable<AuditObservation> FromFacts(string rule, string id, string scope, IReadOnlyList<HardwareFact> facts, bool configured)

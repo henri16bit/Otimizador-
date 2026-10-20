@@ -72,7 +72,11 @@ public partial class App : Application
             var tabs = window.FindName("MainPages") as TabControl ?? throw new InvalidOperationException("As páginas principais não foram encontradas.");
             var navigation = window.FindName("Navigation") as ListBox ?? throw new InvalidOperationException("O menu principal não foi encontrado.");
             var viewModel = (MainViewModel)window.DataContext;
-            if (viewModel.VisibleSections.Count() != 6) throw new InvalidOperationException("O modo simples deve mostrar seis destinos.");
+            var expectedCategories = new[] { "dashboard", "windows", "nvidia", "network", "devices", "latency", "hardware", "games", "ajustes", "avancado" };
+            if (!viewModel.VisibleSections.Select(s => s.Id).SequenceEqual(expectedCategories))
+                throw new InvalidOperationException("O menu deve mostrar as dez categorias de auditoria.");
+            var visitedCategories = new HashSet<string>(StringComparer.Ordinal);
+            var visitedPages = new HashSet<int>();
             viewModel.InterfaceMode = "Avançado";
             var detailViews = 0;
             var initialWidth = window.Width; var initialHeight = window.Height;
@@ -82,9 +86,11 @@ public partial class App : Application
                 if (section.Id == "resultados") viewModel.ShowTechnicalDetails = true;
                 window.UpdateLayout();
                 await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-                if (tabs.SelectedIndex != section.Tab || !Equals(navigation.SelectedItem, section) || viewModel.PageTitle != section.Name)
+                if (tabs.SelectedIndex != section.Tab || !Equals(navigation.SelectedItem, viewModel.MenuSelection) || viewModel.PageTitle != section.Name)
                     throw new InvalidOperationException("O menu e a página ficaram fora de sincronia: " + section.Id);
-                if (section.Id is "dashboard" or "componentes" or "investigar")
+                visitedPages.Add(section.Tab);
+                if (expectedCategories.Contains(section.Id)) visitedCategories.Add(section.Id);
+                if (section.Id is "dashboard" or "componentes" or "investigar" or "windows" or "network")
                     _startup.CaptureView((FrameworkElement)window.Content, section.Id);
                 foreach (var nested in Descendants<TabControl>(tabs).Where(t => t != tabs).ToArray())
                 {
@@ -122,7 +128,9 @@ public partial class App : Application
             _startup.CaptureView((FrameworkElement)window.Content, "overview");
             if (!window.IsVisible || window.ActualWidth <= 0 || window.ActualHeight <= 0)
                 throw new InvalidOperationException("A janela WPF não ficou visível com dimensões válidas.");
-            _startup.ReportSmokeSuccess(tabs.Items.Count, detailViews);
+            if (visitedPages.Count != tabs.Items.Count || visitedCategories.Count != expectedCategories.Length)
+                throw new InvalidOperationException("O teste não percorreu todas as páginas e categorias.");
+            _startup.ReportSmokeSuccess(visitedPages.Count, detailViews, visitedCategories.Count);
             window.Close();
         }
         catch (Exception exception)

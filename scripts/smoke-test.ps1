@@ -17,8 +17,8 @@ try {
     if ($process.ExitCode -ne 0) { throw "A janela WPF encerrou com código $($process.ExitCode). Consulte o resultado de inicialização." }
     if (!(Test-Path -LiteralPath $output)) { throw 'O aplicativo não gravou o resultado do teste da janela.' }
     $result = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
-    if (!$result.success -or $result.views -lt 10 -or $result.detailViews -lt 7 -or !$result.compactLayoutChecked -or $result.passiveHardwareStarted) {
-        throw 'O aplicativo não confirmou as dez páginas, sete abas internas e o tamanho compacto sem iniciar coleta de hardware.'
+    if (!$result.success -or $result.views -lt 11 -or $result.detailViews -lt 7 -or $result.categoryViews -ne 10 -or !$result.compactLayoutChecked -or $result.passiveHardwareStarted) {
+        throw 'O aplicativo não confirmou as onze páginas, dez categorias, sete abas internas e o tamanho compacto sem iniciar coleta de hardware.'
     }
-    Write-Host "Janela WPF validada: $($result.views) páginas, $($result.detailViews) abas internas, tamanho compacto; saída 0."
+    Write-Host "Janela WPF validada: $($result.views) páginas, $($result.categoryViews) categorias, $($result.detailViews) abas internas, tamanho compacto; saída 0."
 } finally { $process.Dispose() }

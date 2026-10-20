@@ -85,6 +85,7 @@ public static class TestReportExporter
             {
                 Title = clean(result.Title), Lines = result.Lines.Select(clean).ToArray(), Metrics = metrics.Samples, Findings = metrics.Findings,
                 ComparisonKey = result.ComparisonKey is null ? null : clean(result.ComparisonKey),
+                SelectionContext = result.SelectionContext is null ? null : "Contexto de seleção omitido na cópia anônima.",
                 Report = result.Report is null ? null : ReportPrivacy.RedactReport(result.Report, clean),
                 Audit = result.Audit is null ? null : ReportPrivacy.RedactAudit(result.Audit, clean),
                 Session = result.Session is null ? null : safe,

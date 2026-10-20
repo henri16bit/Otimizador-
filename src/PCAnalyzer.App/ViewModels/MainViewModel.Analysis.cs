@@ -40,12 +40,11 @@ public sealed partial class MainViewModel
         get => _interfaceMode;
         set { if (InterfaceModes.Contains(value) && Set(ref _interfaceMode, value)) { Notify(nameof(VisibleSections)); Notify(nameof(MenuSelection)); Notify(nameof(HeaderIsAdvancedView)); } }
     }
-    public IEnumerable<Section> VisibleSections => InterfaceMode == "Avançado" ? Sections :
-        new[] { "dashboard", "analisar", "resultados", "ajustes", "avancado", "config" }.Select(id => Sections.Single(s => s.Id == id));
+    public IEnumerable<Section> VisibleSections =>
+        new[] { "dashboard", "windows", "nvidia", "network", "devices", "latency", "hardware", "games", "ajustes", "avancado" }.Select(id => Sections.Single(s => s.Id == id));
     public Section? MenuSelection
     {
-        get => InterfaceMode == "Avançado" ? SelectedSection : Sections.FirstOrDefault(s => s.Id == (SelectedSection?.Id switch
-        { "componentes" or "processos" or "investigar" => "avancado", "historico" => "resultados", var id => id }));
+        get => VisibleSections.Contains(SelectedSection!) ? SelectedSection : Sections.Single(s => s.Id == "avancado");
         set { if (value is not null) SelectedSection = value; }
     }
     public bool HeaderIsAdvancedView => InterfaceMode == "Avançado" || SelectedSection?.Id is "componentes" or "processos" or "investigar" or "avancado";
@@ -123,7 +122,7 @@ public sealed partial class MainViewModel
             RefreshDisplay(); RefreshTelemetryHealth();
             Status = "Fontes reiniciadas. Aguarde as próximas leituras; nenhum ajuste do Windows foi alterado.";
         });
-        OpenGameAnalysisCommand = new RelayCommand(() => Navigate("analisar"));
+        OpenGameAnalysisCommand = new RelayCommand(() => Navigate("games"));
         OpenLastDiagnosticCommand = new RelayCommand(() =>
         { if (_lastDiagnostic is { } run) { DisplayTestResult(run); Navigate("resultados"); } }, () => HasDiagnostic);
         SuggestedActionCommand = new RelayCommand(parameter =>
@@ -175,7 +174,7 @@ public sealed partial class MainViewModel
         if (IncludePing) explanation += "\n• Rede: enviar 20 pacotes ICMP para " + PingHost.Trim() + ".";
         if (IncludeLatency) explanation += "\n• Drivers: captura ETW de 30 s, com confirmação UAC do Windows e possível custo adicional.";
         if (gaming) explanation += $"\n• Jogo: captura externa de quadros por 30 s. {(pid is { } p ? "PID " + p : "Aguardar " + GameWaitProcessName + " por até " + GameWaitSeconds + " s")}.";
-        if (!Confirm(gaming ? "Analisar durante o jogo" : "Analisar meu PC", explanation + "\n\nIniciar análise?")) return;
+        if ((gaming || IncludePing || IncludeLatency) && !Confirm(gaming ? "Analisar durante o jogo" : "Confirmar testes opcionais", explanation + "\n\nIniciar análise?")) return;
         try
         {
             await RunTestAsync(gaming ? "gaming-analysis" : "general", (progress, ct) => _backend.AnalyzePcAsync(options, progress, batch =>
@@ -199,13 +198,12 @@ public sealed partial class MainViewModel
     {
         _simpleReport = result?.Report;
         _auditReport = result?.Audit;
+        if (result?.Audit is { } audit) UpdateAuditSettings(audit);
         Replace(ReportComponents, _simpleReport?.Components ?? []);
         Replace(ReportRecommendations, Recommendations(_simpleReport));
         Replace(AuditCategories, (_auditReport?.Assessments ?? []).GroupBy(a => a.Rule.Category)
             .Select(g => new AuditCategoryRow(g.Key, g.Select(a => new AuditAssessmentRow(a)).ToArray())));
-        Replace(AuditRecommendations, (_auditReport?.Assessments ?? [])
-            .Where(a => a.Classification is AuditClassification.DemonstratedProblem or AuditClassification.PossibleProblem or AuditClassification.ComparisonOpportunity)
-            .OrderBy(a => a.Classification).Take(8).Select(a => new AuditAssessmentRow(a)));
+        Replace(AuditRecommendations, PriorityAuditSettings.Select(r => new AuditAssessmentRow(r.Evidence[0])));
         Replace(AuditHighlights, (_auditReport?.Assessments ?? [])
             .Where(a => a.Classification is AuditClassification.DemonstratedProblem or AuditClassification.PossibleProblem
                 or AuditClassification.NoDocumentedEffect or AuditClassification.AppliedUnproven or AuditClassification.ComparisonOpportunity)
@@ -216,6 +214,7 @@ public sealed partial class MainViewModel
         ShowTechnicalDetails = result is not null && !HasConsultationReport;
         foreach (var name in new[] { nameof(HasSimpleReport), nameof(HasAuditReport), nameof(HasConsultationReport), nameof(HasInlineResult), nameof(SimpleReportTitle), nameof(SimpleReportSummary), nameof(SimpleReportState),
             nameof(AuditCoverage), nameof(AuditSummary), nameof(AuditRecommendationsSummary), nameof(AuditAdequateSummary), nameof(LatencyAssessments) }) Notify(name);
+        NotifyAuditExperience();
     }
     private static IEnumerable<RecommendationRow> Recommendations(DiagnosticReport? report) => report?.Recommendations.Select(action =>
         new RecommendationRow(report.Components.FirstOrDefault(c => c.NextAction == action)?.Name ?? "Próximo passo", action.Reason, action.Label, action)) ?? [];
@@ -252,5 +251,6 @@ public sealed partial class MainViewModel
                 source?.Detail ?? "Consulte os detalhes em Avançado → Componentes.");
         }));
         Notify(nameof(CollectionStateLabel)); Notify(nameof(ViewContext)); Notify(nameof(ProcessEmptyMessage));
+        Notify(nameof(CompactHardwareSummary));
     }
 }

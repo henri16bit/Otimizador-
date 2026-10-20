@@ -1,25 +1,26 @@
-# PC Performance Analyzer v0.5.0-preview.3
+# PC Performance Analyzer v0.6.0-preview.1
 
-**ANALISAR MEU PC** coordena observação, rede e fontes opcionais em um relatório: o que foi medido, o que merece atenção, o que permanece inconclusivo e qual o próximo passo.
+**ANALISAR MEU PC → escolher uma categoria → comparar atual e recomendação → abrir a explicação → medir quando necessário.** A auditoria existente ganha uma interface compacta, com dados reais e sem alterações nas configurações do computador.
 
-- Versão exclusivamente de auditoria e consultoria: Recomendações substitui Otimizações. Aplicação/restauração de ajustes está bloqueada também na API e no auxiliar.
-- Catálogo extensível com leituras de Registro/MMCSS/IFEO/energia/mouse, processos/serviços, NVIDIA DRS, MSI/IRQ/afinidade/USB, rede e armazenamento. Estado configurado não é tratado como benefício comprovado.
-- Resultados na própria tela, cobertura por área, detalhes técnicos recolhidos, snapshots persistidos e comparação de configurações.
-- Teste manual adicional de memória: leitura/escrita/cópia/acesso dependente em buffers virtuais; não mede DRAM isoladamente.
-- CPU/RAM e processos começam sem esperar todo o inventário. Fontes opcionais têm recuperação limitada; pausa, atraso e falha ficam visíveis.
-- Rede identifica a conexão e lê driver/propriedades automaticamente. A análise compara erros no intervalo da mesma conexão.
-- Jogos permitem configurar PresentMon assinado, selecionar um processo ou aguardar sua abertura. Capturas e testes ativos continuam opcionais.
-- ETW distingue DPC, ISR, eventos auxiliares, rejeitados e analisados. Cancelamentos e falhas de leitura preservam dados disponíveis.
-- Relatórios parciais, processos, evidências e próximos passos ficam no histórico. Importações não alteram leituras atuais. Falhas não mantêm indicadores ou exportações do resultado anterior.
+- Dez destinos no menu: Início, Windows, NVIDIA, Rede, MSI / IRQ / USB, Latência, Hardware, Jogos, Recomendações e Avançado.
+- Início com uma ação principal, resumo na própria tela e até cinco pontos priorizados. A análise padrão não exige confirmação extra; operações com tráfego, captura ou carga continuam manuais e confirmadas.
+- Listas de configurações com valor atual, recomendação e status; busca por nome, grupos, cinco filtros e ordenação. A virtualização evita criar simultaneamente todas as linhas de listas extensas.
+- Janela de detalhes com justificativa, impacto possível, confiança, riscos e teste compatível. Valores brutos, Registro, GUIDs e evidências completas ficam em uma seção recolhida. Fechar a janela preserva a categoria e seus filtros.
+- Recomendações distinguem manter, comparar e depender de medição. Não há valor ideal inventado. Dispositivos virtuais, código PnP 22 e campos documentados como ignorados deixam de ocupar o destaque de melhorias sem evidência relevante.
+- Rede distingue falta de permissão, comando ausente, consulta não suportada e falha de leitura. Valores vazios e funções de energia não suportadas não aparecem como medições bem-sucedidas. A identificação por GUID mantém a proteção contra associar dados ao adaptador errado.
+- Resultados de rede, memória, armazenamento e jogos aparecem na seção correspondente, com estado, unidades e detalhes recolhidos. Latência separa DPC/ISR, frametime, RTT e acesso à memória; não calcula input lag total.
+- Histórico, exportações, comparações, coletores, importações ETL/CSV, captura manual e ferramentas avançadas foram preservados. Aplicação e restauração de ajustes continuam bloqueadas na interface, API e auxiliar.
 
 Baixe **PCAnalyzer-windows-x64.zip** em **Assets**. Os arquivos “Source code” contêm apenas código-fonte.
 
-1. Extraia o ZIP completo para uma pasta gravável.
-2. Abra **PCAnalyzer.exe**, mantendo DLLs e subpastas junto dele.
-3. Use **ANALISAR MEU PC**. Em Analisar, escolha duração e testes opcionais.
+1. Extraia o ZIP completo para uma pasta nova e gravável.
+2. Abra **PCAnalyzer.exe** como usuário normal, mantendo DLLs e subpastas junto dele.
+3. Clique em **ANALISAR MEU PC** e consulte as categorias.
 
-O pacote portátil inclui o runtime .NET. Extraia tudo em uma pasta nova e inicie `PCAnalyzer.exe` como usuário normal. O auxiliar solicita UAC somente para captura DPC/ISR autorizada. Nenhuma configuração operacional é alterada. Perfis NVIDIA e dispositivos físicos ainda exigem validação no computador alvo; consulte `docs/PERFORMANCE-CONSULTANCY.md`.
+O pacote portátil inclui o runtime .NET; não exige instalação separada. O auxiliar solicita UAC para a captura DPC/ISR autorizada. Nenhuma configuração operacional é alterada.
 
-A publicação exige compilação sem avisos, testes de lógica/empacotamento, cenários WPF e verificação passiva real de CPU/RAM/processos no runner Windows. Isso não substitui validação de GPU, ETW, PresentMon, leituras dos dispositivos e Windows 10 Pro 22H2 no computador alvo. Benchmark GPU, SMART completo, sensores térmicos CPU e testes de carga mais amplos continuam limitados; não são estimados.
+A publicação exige compilação sem avisos, testes de lógica, empacotamento, cenários WPF e verificação passiva no runner Windows. Os resultados efetivamente obtidos ficam em `docs/VALIDATION.md`; a existência dessas verificações não equivale à validação do computador alvo.
 
-O executável do PC Analyzer ainda não é assinado. Se a abertura falhar, consulte `%LOCALAPPDATA%\PCAnalyzer\logs\startup-last-error.txt`. Confira o download com `Get-FileHash .\PCAnalyzer-windows-x64.zip -Algorithm SHA256` e compare com o arquivo `.sha256`.
+Permanecem necessárias as verificações no Windows 10 Pro 22H2 do usuário: NVIDIA, Intel I219-V, NVMe, ETW/PresentMon, Vanguard e escala real do Windows em 125% e 150%. Layout automatizado e dados de teste não comprovam funcionamento desses dispositivos nem ganhos em jogos. Leituras sem suporte, SPD/timings/canais, input lag físico e outros limites estão em `docs/AUDIT-EXPERIENCE.md` e `docs/PERFORMANCE-CONSULTANCY.md`.
+
+O executável ainda não é assinado. Se a abertura falhar, consulte `%LOCALAPPDATA%\PCAnalyzer\logs\startup-last-error.txt`. Confira o download com `Get-FileHash .\PCAnalyzer-windows-x64.zip -Algorithm SHA256` e compare com o arquivo `.sha256`.

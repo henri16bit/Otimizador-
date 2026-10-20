@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using System.Windows.Input;
+using PCAnalyzer.App.Controls;
 using PCAnalyzer.App;
 using PCAnalyzer.App.Services;
 using PCAnalyzer.App.ViewModels;
@@ -18,6 +20,7 @@ namespace PCAnalyzer.WpfHarness;
 internal static class Program
 {
     private static int _exitCode = 1;
+    private static int _confirmationCalls;
     [STAThread]
     public static int Main()
     {
@@ -26,7 +29,7 @@ internal static class Program
         var bindingErrors = new BindingErrors();
         PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Error;
         PresentationTraceSources.DataBindingSource.Listeners.Add(bindingErrors);
-        var backend = new ScenarioBackend(); var vm = new MainViewModel(backend);
+        var backend = new ScenarioBackend(); var vm = new MainViewModel(backend, confirmation: (_, _) => { _confirmationCalls++; return true; });
         var window = new MainWindow(vm, initializeHardware: false); application.MainWindow = window;
         window.Show();
         _ = window.Dispatcher.BeginInvoke(async () =>
@@ -38,9 +41,11 @@ internal static class Program
                 Directory.CreateDirectory("artifacts");
                 await File.WriteAllTextAsync("artifacts/ui-flow-result.json", JsonSerializer.Serialize(new { success = true,
                     checks = new[] { "readable selection labels", "interrupted execution recovery", "dashboard progress", "navigation during run", "no forced navigation", "cancel", "failure", "reopen stored result", "network read and unavailable property", "missing sensors",
-                        "collection before inventory", "six simple navigation entries", "structured general report", "missing GPU is inconclusive", "report history reopen", "failure clears old report", "imports do not change live readings", "no WPF binding errors", "offscreen WPF layouts at 1366x768 and 1920x1080", "gaming opt-in commands", "failed analysis remains latest attempt", "selected finding remains in its module",
+                        "collection before inventory", "ten category navigation entries", "structured general report", "missing GPU is inconclusive", "report history reopen", "failure clears old report", "imports do not change live readings", "no WPF binding errors", "offscreen WPF layouts at 1366x768 and 1920x1080", "gaming opt-in commands", "failed analysis remains latest attempt", "selected finding remains in its module",
                         "general result on same page", "audit command and same-page coverage", "audit SQLite history reopen", "read-only consultation without apply controls", "audit cancellation and failure clear stale conclusions",
-                        "audit partial state and export", "cancelled audit retains only newly collected evidence", "audit layouts at requested viewports", "memory access test is discoverable and manual" },
+                        "audit partial state and export", "cancelled audit retains only newly collected evidence", "audit layouts at requested viewports", "memory access test is discoverable and manual", "category filters search and ordering", "large audit list virtualizes containers",
+                        "compact rows hide technical identities", "detail modal closes with keyboard and preserves context", "priority recommendations exclude disabled and ignored entries",
+                        "manual network result remains in its category and preserves audit", "simulated 100 125 and 150 percent layouts", "one-click passive analysis needs no confirmation" },
                     fixtureDataOnly = true, hardwareOrConfigurationChanged = false }));
                 _exitCode = 0;
             }
@@ -63,7 +68,7 @@ internal static class Program
         Require(vm.OverviewCards.All(c => c.Value == "—"), "Unavailable sensors must not become zero.");
         Require(backend.AuditCalls == 0 && backend.LabCalls == 0, "Startup must not initiate an audit or benchmark.");
         vm.SelectedTest = TestCatalog.Get("ping");
-        Require(vm.VisibleSections.Select(s => s.Id).SequenceEqual(new[] { "dashboard", "analisar", "resultados", "ajustes", "avancado", "config" }), "Simple navigation differs from the six intended destinations.");
+        Require(vm.VisibleSections.Select(s => s.Id).SequenceEqual(new[] { "dashboard", "windows", "nvidia", "network", "devices", "latency", "hardware", "games", "ajustes", "avancado" }), "Navigation differs from the ten intended category destinations.");
         vm.NavigateCommand.Execute("analisar");
         window.UpdateLayout();
         await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -115,7 +120,7 @@ internal static class Program
         vm.NavigateCommand.Execute("analisar");
         await RunFixture(vm, "general", (progress, ct) => backend.AnalyzePcAsync(new(ObservationSeconds: 1), progress, _ => { }, ct));
         window.UpdateLayout();
-        Require(vm.SelectedSection?.Id == "analisar" && vm.HasInlineResult && Descendants<TextBlock>(window).Any(t => t.Text == vm.SimpleReportSummary),
+        Require(vm.SelectedSection?.Id == "analisar" && vm.HasInlineResult && Descendants<TextBlock>(window).Any(t => t.Text == vm.HomeAuditSummary),
             "General result must be rendered under the analysis action without forced navigation.");
         Require(vm.HasDiagnostic && vm.HasSimpleReport && vm.CanExportTest && vm.ReportComponents.Count >= 8, "General analysis lost its structured report.");
         Require(vm.ReportComponents.Single(c => c.Id == "gpu").State == DiagnosticAssessmentState.Inconclusive, "Missing GPU must remain inconclusive.");
@@ -168,7 +173,11 @@ internal static class Program
             "Audit coverage must distinguish available observations from unavailable areas and avoid artificial recommendations.");
         Require(vm.ExecutionState == "Resultado parcial" && vm.SimpleReportState.Contains("parcial") && vm.CanExportTest,
             "Incomplete audit must remain visibly partial while allowing export of the evidence obtained.");
-        Require(Descendants<TextBlock>(window).Any(t => t.Text == vm.AuditCoverage), "Coverage is not rendered on the dashboard.");
+        var auditDetails = Descendants<Expander>(window).Single(e => Equals(e.Header, "Detalhes técnicos da análise"));
+        Require(!auditDetails.IsExpanded, "The audit must begin with a short summary and collapsed technical details.");
+        auditDetails.IsExpanded = true; window.UpdateLayout();
+        Require(Descendants<TextBlock>(auditDetails).Any(t => t.Text == vm.AuditCoverage), "Audit coverage is not reachable from the dashboard's technical details.");
+        auditDetails.IsExpanded = false; window.UpdateLayout();
         diagnostics.CaptureView((FrameworkElement)window.Content, "audit-fixture");
         var auditId = vm.RecentAnalyses.First().Id;
         var audit = await backend.LoadTestAsync(auditId);
@@ -178,11 +187,9 @@ internal static class Program
         Require(vm.PageTitle == "Recomendações" && !Descendants<Button>(window).Any(b => b.Content is string label &&
             (label.Contains("Aplicar", StringComparison.OrdinalIgnoreCase) || label.Contains("Restaurar", StringComparison.OrdinalIgnoreCase) || label.Contains("Revisar alteração", StringComparison.OrdinalIgnoreCase))),
             "Consultation still exposes a Windows write/restore action.");
-        foreach (var category in Descendants<Expander>(window).Where(e => Equals(e.Header, "Ver configurações desta área")).ToArray()) category.IsExpanded = true;
-        window.UpdateLayout();
-        foreach (var detail in Descendants<Expander>(window).Where(e => Equals(e.Header, "Por que importa · riscos · como validar") || Equals(e.Header, "Evidências e fonte técnica")).ToArray()) detail.IsExpanded = true;
-        window.UpdateLayout();
-        Require(Descendants<TextBlock>(window).Any(t => t.Text == "0x26 (38)"), "Optional audit evidence is not reachable.");
+        vm.NavigateCommand.Execute("windows"); window.UpdateLayout();
+        Require(vm.FilteredAuditSettings.Any(), "The Windows category did not expose its audit rows.");
+        Require(Descendants<AuditSettingRow>(window).Any(), "Audit rows were not rendered in the category.");
         Require(typeof(MainViewModel).GetProperties().All(p => p.Name is not ("PowerPreviewCommand" or "NetworkPreviewCommand" or "RestoreCommand")),
             "Write commands remain exposed by the view model.");
         foreach (var size in new[] { new Size(1366, 768), new Size(1920, 1080) })
@@ -190,16 +197,16 @@ internal static class Program
             content.Width = size.Width; content.Height = size.Height;
             content.Measure(size); content.Arrange(new Rect(new Point(), size));
             Require(Math.Abs(content.ActualWidth - size.Width) < 1 && Math.Abs(content.ActualHeight - size.Height) < 1
-                && Descendants<TextBlock>(content).Any(t => t.Text == vm.AuditCoverage), "Audit report failed to render at " + size);
+                && Descendants<AuditSettingRow>(content).Any(), "Audit report failed to render at " + size);
             diagnostics.CaptureView(content, "audit-" + size.Width);
         }
         content.Width = double.NaN; content.Height = double.NaN;
         window.InvalidateMeasure(); window.UpdateLayout();
         backend.AuditMode = "cancel"; vm.AuditConfigurationCommand.Execute(null); await Until(() => vm.TestIsActive);
-        Require(!vm.HasAuditReport && !vm.HasInlineResult && vm.AuditCategories.Count == 0,
+        Require(!vm.HasAuditReport && !vm.HasAuditSettings && !vm.HasInlineResult && vm.AuditCategories.Count == 0 && vm.PriorityAuditSettings.Count == 0,
             "A new audit displayed conclusions from the previous execution while still running.");
         vm.CancelCommand.Execute(null); await Until(() => !vm.IsBusy);
-        Require(vm.ExecutionState == "Cancelado" && !vm.HasAuditReport && vm.AuditCategories.Count == 0 && vm.AuditRecommendations.Count == 0 && vm.HasInlineResult,
+        Require(vm.ExecutionState == "Cancelado" && !vm.HasAuditReport && !vm.HasAuditSettings && vm.AuditCategories.Count == 0 && vm.AuditRecommendations.Count == 0 && vm.HasInlineResult,
             "Cancelled audit reused old conclusions.");
         var previousAuditCalls = backend.AuditCalls;
         backend.AuditMode = "partial-cancel"; vm.AuditConfigurationCommand.Execute(null);
@@ -208,7 +215,7 @@ internal static class Program
         await Until(() => backend.AuditCalls == previousAuditCalls + 1 && vm.TestIsActive
             && vm.ExecutionStage == "Fixture: lendo configurações");
         vm.CancelCommand.Execute(null); await Until(() => !vm.IsBusy);
-        Require(vm.ExecutionState == "Cancelado" && vm.HasAuditReport && vm.CanExportTest && vm.SimpleReportState.Contains("cancelado")
+        Require(vm.ExecutionState == "Cancelado" && vm.HasAuditReport && vm.HasAuditSettings && vm.CanExportTest && vm.SimpleReportState.Contains("cancelado")
             && vm.AuditCategories.SelectMany(c => c.Assessments).Single(a => a.Assessment.Observation.Status == Availability.Available).RawValue == "0x2A (42)",
             "Cancelled audit must retain only evidence returned by the current execution and show its cancelled state. "
             + $"State={vm.ExecutionState}; Report={vm.HasAuditReport}; Export={vm.CanExportTest}; Label={vm.SimpleReportState}");
@@ -216,15 +223,208 @@ internal static class Program
         Require(cancelledAudit?.Status == TestStatus.Cancelled && cancelledAudit.Result?.Audit?.Assessments[0].Observation.RawValue == "0x2A (42)",
             "New evidence from cancelled audit was lost from SQLite.");
         backend.AuditMode = "failure"; vm.AuditConfigurationCommand.Execute(null); await Until(() => !vm.IsBusy);
-        Require(vm.LastDiagnosticState == "Falhou" && vm.SimpleReportSummary.Contains("fixture audit denied") && !vm.HasAuditReport,
+        Require(vm.LastDiagnosticState == "Falhou" && vm.SimpleReportSummary.Contains("fixture audit denied") && !vm.HasAuditReport && !vm.HasAuditSettings,
             "Failed audit hid its error or reused old conclusions.");
         vm.SelectedRun = vm.TestHistory.Single(r => r.Id == auditId); vm.OpenTestCommand.Execute(null); await Until(() => !vm.IsBusy);
         Require(vm.HasAuditReport && vm.AuditCategories.Count == 2 && vm.LastDiagnosticState == "Falhou",
             "Opening saved audit lost evidence or replaced the latest failed attempt.");
+        await VerifyAuditExperienceAsync(window, vm, backend, diagnostics);
         vm.OpenInvestigationCommand.Execute("testes"); window.UpdateLayout();
         Require(vm.MemoryAccessCommand.CanExecute(null) && Descendants<Button>(window).Any(b => ReferenceEquals(b.Command, vm.MemoryAccessCommand))
             && backend.LabCalls == 0, "Memory access benchmark needs an explicit discoverable action and must not run while navigating.");
     }
+    private static async Task VerifyAuditExperienceAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend, StartupDiagnostics diagnostics)
+    {
+        vm.NavigateCommand.Execute("dashboard");
+        var confirmations = _confirmationCalls;
+        vm.AnalyzePcCommand.Execute(null);
+        await Until(() => !vm.IsBusy);
+        Require(_confirmationCalls == confirmations && vm.HasSimpleReport && vm.SelectedSection?.Id == "dashboard",
+            "The passive general analysis must start with one click, finish on its initiating page and not request active-test confirmation.");
+
+        var report = ExperienceFixture();
+        await RunFixture(vm, "audit.configuration", (_, _) => Task.FromResult(new TechnicalResult("Fixture de experiência", [report.Summary], Audit: report, Partial: true)));
+        Require(vm.PriorityAuditSettings.Count <= 5 && vm.PriorityAuditSettings.All(r => r.IsImprovement && r.Name != "Microsoft Kernel Debug Network Adapter" && !r.Name.Contains("GPU Priority")),
+            "Priority recommendations must be bounded and must not promote disabled devices or ignored MMCSS fields.");
+        Require(vm.PriorityAuditSettings.Any(), "The fixture's supported hypotheses disappeared from the priority summary.");
+        foreach (var category in vm.VisibleSections.ToArray())
+        {
+            vm.NavigateCommand.Execute(category.Id); window.UpdateLayout();
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Require(vm.SelectedSection?.Id == category.Id && vm.PageTitle == category.Name, "Category navigation lost selection: " + category.Id);
+        }
+        vm.NavigateCommand.Execute("windows");
+        vm.AuditSearch = "";
+        vm.SelectedAuditFilter = vm.AuditFilters.First();
+        vm.SelectedAuditSubcategory = vm.AuditSubcategories.First();
+        window.UpdateLayout();
+        Require(vm.FilteredAuditSettings.Count > 1000, "Large fixture did not reach the real category list.");
+        var list = Descendants<ListBox>(window).Single(l => l.Name == "AuditSettingsItems");
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+        var realized = Descendants<ListBoxItem>(list).Count();
+        Require(VirtualizingPanel.GetIsVirtualizing(list) && realized > 0 && realized < 100 && list.Items.Count > 1000,
+            $"The audit list must virtualize real containers. Total={list.Items.Count}; realized={realized}.");
+        list.ScrollIntoView(list.Items[^1]); window.UpdateLayout();
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Require(list.ItemContainerGenerator.ContainerFromIndex(list.Items.Count - 1) is ListBoxItem,
+            "Virtualized rows cannot be reached by scrolling.");
+        Require(Descendants<ListBoxItem>(list).Count() < 100, "Scrolling materialized the entire audit list.");
+
+        vm.AuditSearch = "Energy fixture";
+        window.UpdateLayout();
+        Require(vm.FilteredAuditSettings.Count == 1 && vm.FilteredAuditSettings[0].Name == "Energy fixture",
+            "Search must filter actual configuration names.");
+        var selected = vm.FilteredAuditSettings[0];
+        list.SelectedItem = selected;
+        list.ScrollIntoView(selected); window.UpdateLayout();
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+        var row = Descendants<AuditSettingRow>(list).Single(r => ReferenceEquals(r.DataContext, selected));
+        var texts = Descendants<TextBlock>(row).Select(t => t.Text).ToArray();
+        Require(texts.Contains(selected.CurrentValue) && texts.Contains(selected.RecommendedValue) && texts.Contains(selected.StatusLabel)
+            && texts.All(t => !t.Contains("HKEY_", StringComparison.OrdinalIgnoreCase) && !t.Contains("5d9ec6fe-3e84-4fe1-bf8e-73b371bef067", StringComparison.OrdinalIgnoreCase)),
+            "Compact rows must show current/recommended/status and keep original registry paths and identities in details.");
+        var details = Descendants<Button>(row).Single(b => b.Name == "SettingDetailsButton");
+        details.BringIntoView(); details.Focus();
+        Require(details.IsKeyboardFocused, "The setting details action must be reachable by keyboard before opening the modal.");
+        Exception? modalFailure = null;
+        _ = window.Dispatcher.BeginInvoke(() =>
+        {
+            AuditSettingDialog? dialog = null;
+            try
+            {
+                dialog = Application.Current.Windows.OfType<AuditSettingDialog>().Single();
+                Require(ReferenceEquals(dialog.Setting, selected), "The detail modal opened the wrong configuration.");
+                var technical = (Expander)dialog.FindName("TechnicalDetailsExpander");
+                var close = (Button)dialog.FindName("CloseDetailsButton");
+                Require(!technical.IsExpanded && close.IsKeyboardFocused, "Technical details must start collapsed and the modal must receive keyboard focus.");
+                Require(dialog.ActualWidth <= 680 && dialog.ActualHeight <= SystemParameters.WorkArea.Height,
+                    "The explanation modal exceeds the available work area.");
+                technical.IsExpanded = true; dialog.UpdateLayout();
+                Require(Descendants<TextBox>(dialog).Any(t => t.IsReadOnly && t.Text.Contains("HKEY_LOCAL_MACHINE", StringComparison.Ordinal)),
+                    "The original registry evidence is no longer accessible in technical details.");
+                technical.IsExpanded = false;
+                diagnostics.CaptureView((FrameworkElement)dialog.Content, "setting-modal");
+                dialog.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(dialog), Environment.TickCount, Key.Escape)
+                    { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+                Require(!dialog.IsVisible, "Escape did not close the setting explanation.");
+            }
+            catch (Exception error) { modalFailure = error; }
+            finally { if (dialog?.IsVisible == true) dialog.Close(); }
+        }, DispatcherPriority.ApplicationIdle);
+        vm.OpenAuditSettingCommand.Execute(selected);
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        if (modalFailure is not null) throw new InvalidOperationException("Modal fixture failed.", modalFailure);
+        Require(vm.SelectedSection?.Id == "windows" && vm.AuditSearch == "Energy fixture" && ReferenceEquals(list.SelectedItem, selected)
+            && details.IsKeyboardFocused, "Closing details lost the category, search, selected row or keyboard focus.");
+        vm.NavigateCommand.Execute("network");
+        Require(vm.AuditSearch.Length == 0, "The Windows search leaked into a different category.");
+        vm.NavigateCommand.Execute("windows");
+        Require(vm.AuditSearch == "Energy fixture" && vm.FilteredAuditSettings.Count == 1,
+            "Returning to a category lost its saved search and filtered settings.");
+
+        vm.AuditSearch = "";
+        foreach (var filter in vm.AuditFilters)
+        {
+            vm.SelectedAuditFilter = filter;
+            var rows = vm.FilteredAuditSettings;
+            Require(rows.Count > 0, "Fixture filter unexpectedly returned no rows: " + filter);
+            Require(filter switch
+            {
+                "Melhorias possíveis" => rows.All(r => r.IsImprovement),
+                "Vale testar" => rows.All(r => r.IsComparison),
+                "Adequadas" => rows.All(r => r.IsAdequate),
+                "Não avaliadas" => rows.All(r => r.IsUnassessed),
+                _ => rows.Count > 1000
+            }, "A category filter included incompatible rows: " + filter);
+        }
+        vm.SelectedAuditFilter = vm.AuditFilters.First();
+        vm.SelectedAuditSubcategory = "Energia";
+        Require(vm.FilteredAuditSettings.Count == 1 && vm.FilteredAuditSettings[0].Subcategory == "Energia", "Subcategory selection did not restrict the list.");
+        vm.SelectedAuditSubcategory = vm.AuditSubcategories.First();
+        vm.AuditSort = "Nome";
+        Require(vm.FilteredAuditSettings.Select(r => r.Name).SequenceEqual(vm.FilteredAuditSettings.Select(r => r.Name).Order()),
+            "Name ordering did not sort the actual category list.");
+        vm.AuditSort = "Prioridade";
+        Require(vm.FilteredAuditSettings.Select(r => r.Priority).SequenceEqual(vm.FilteredAuditSettings.Select(r => r.Priority).OrderDescending()),
+            "Priority ordering did not sort the actual category list.");
+
+        var content = (FrameworkElement)window.Content;
+        foreach (var pixels in new[] { new Size(1366, 768), new Size(1920, 1080) })
+        foreach (var scale in new[] { 1d, 1.25d, 1.5d })
+        {
+            // A virtual DIP viewport checks layout pressure at the requested scale. This is
+            // a simulation, not a physical monitor DPI change or a per-monitor DPI assertion.
+            var viewport = new Size(pixels.Width / scale, pixels.Height / scale);
+            content.Width = viewport.Width; content.Height = viewport.Height;
+            content.Measure(viewport); content.Arrange(new Rect(new Point(), viewport));
+            Require(Math.Abs(content.ActualWidth - viewport.Width) < 1 && Math.Abs(content.ActualHeight - viewport.Height) < 1,
+                $"Simulated viewport failed: {pixels}, scale={scale}.");
+            Require(Descendants<AuditSettingRow>(content).Any() && Descendants<Button>(content).Where(b => b.Name == "SettingDetailsButton").All(b => b.ActualWidth >= 50),
+                $"Compact audit rows lost usable detail controls at {pixels}, scale={scale}.");
+            diagnostics.CaptureView(content, $"audit-{pixels.Width}-scale-{scale.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}-simulated");
+        }
+        content.Width = double.NaN; content.Height = double.NaN; window.InvalidateMeasure(); window.UpdateLayout();
+
+        vm.NavigateCommand.Execute("network"); window.UpdateLayout();
+        var beforeRows = vm.FilteredAuditSettings.Select(r => r.Key).ToArray();
+        Require(beforeRows.Length == 1, "Network fixture did not reach its category.");
+        backend.Mode = "complete"; confirmations = _confirmationCalls;
+        vm.PingCommand.Execute(null); await Until(() => !vm.IsBusy);
+        Require(_confirmationCalls == confirmations + 1 && vm.SelectedSection?.Id == "network" && vm.HasCategoryTestResult
+            && vm.CategoryTestIndicators.Any(i => i.Reading.StartsWith("1")) && vm.HasAuditSettings
+            && beforeRows.SequenceEqual(vm.FilteredAuditSettings.Select(r => r.Key)),
+            "A confirmed manual network test must display its result in the category and preserve the audited settings.");
+        window.UpdateLayout();
+        Require(Descendants<TextBlock>(window).Any(t => t.Text == vm.CategoryTestTitle), "The category result was not bound into its view.");
+        diagnostics.CaptureView(content, "network-result-fixture");
+        var networkRunId = vm.CategoryTestId;
+        Require(networkRunId is not null, "The category result must retain its persisted session identity.");
+        vm.NavigateCommand.Execute("hardware");
+        await RunFixture(vm, "memory-access", (_, _) => Task.FromResult(new TechnicalResult("Memory category fixture", ["Fixture only; no memory benchmark executed"],
+            Indicators: [new("memory.fixture.access", "Acesso fixture", 12, "ns/acesso", "test-only")])));
+        Require(vm.SelectedSection?.Id == "hardware" && vm.CategoryTestId != networkRunId && vm.CategoryTestIndicators.Any(i => i.Reading.StartsWith("12")),
+            "A memory result must remain in Hardware and have a different session from the network result.");
+        vm.NavigateCommand.Execute("windows");
+        Require(!vm.HasCategoryTestResult, "Network measurements leaked into the Windows category.");
+        vm.NavigateCommand.Execute("network");
+        Require(vm.HasCategoryTestResult && vm.CategoryTestId == networkRunId && beforeRows.SequenceEqual(vm.FilteredAuditSettings.Select(r => r.Key)),
+            "Navigating away lost the category's measurement or audit rows.");
+        vm.OpenCategoryTestCommand.Execute(null);
+        Require(vm.SelectedSection?.Id == "resultados" && vm.OperationTitle == "Fixture: rede concluída" && vm.CanExportTest
+            && vm.ResultIndicators.Any(i => i.Reading.StartsWith("1")),
+            "Opening the network category result must select its own session, even after another category completed a newer test.");
+    }
+
+    private static PerformanceAuditReport ExperienceFixture()
+    {
+        var rows = new List<AuditAssessment>();
+        void Add(string id, string instance, string name, AuditClassification classification, Availability availability = Availability.Available,
+            AuditSupport support = AuditSupport.Conditional, IReadOnlyDictionary<string, string>? facts = null)
+        {
+            var rule = new AuditRule(id, "Fixture category", name, "Fixture only", "Fixture", "Fixture", "Fixture evidence",
+                "No measured gain", support, "Test only; no hardware accessed", "Compare equivalent observations", ["https://example.test/fixture"]);
+            var observation = new AuditObservation(id, instance, name, "Fixture scope", availability == Availability.Available ? "8" : null,
+                availability, "Fixture source", facts ?? new Dictionary<string, string>());
+            rows.Add(new(observation, rule, classification, "Fixture interpretation", "Fixture rationale", "No gain demonstrated",
+                Confidence.Medium, "Fixture risk", "Fixture validation"));
+        }
+        for (var i = 0; i < 1100; i++) Add("windows.fixture.bulk", "bulk-" + i, "Background fixture " + i, AuditClassification.InsufficientData);
+        Add("windows.power.fixture", "5d9ec6fe-3e84-4fe1-bf8e-73b371bef067", "Energy fixture", AuditClassification.ComparisonOpportunity,
+            facts: new Dictionary<string, string> { ["registryPath"] = @"HKEY_LOCAL_MACHINE\Software\Fixture", ["decimal"] = "8" });
+        Add("windows.fixture.healthy", "healthy", "Healthy fixture", AuditClassification.Adequate);
+        Add("windows.fixture.unavailable", "missing", "Unavailable fixture", AuditClassification.Unsupported, Availability.Unsupported);
+        Add("windows.mmcss.gpu", "ignored", "GPU Priority", AuditClassification.NoDocumentedEffect, support: AuditSupport.Ignored);
+        Add("devices.identity", @"ROOT\FIXTURE\0", "Microsoft Kernel Debug Network Adapter", AuditClassification.PossibleProblem,
+            facts: new Dictionary<string, string> { ["pnpProblemCode"] = "22", ["class"] = "Net" });
+        Add("network.advanced", "network-fixture", "Interrupt Moderation", AuditClassification.ComparisonOpportunity,
+            facts: new Dictionary<string, string> { ["DisplayValue"] = "Enabled" });
+        Add("nvidia.fixture", "nvidia-fixture", "Perfil global fixture", AuditClassification.AppliedUnproven);
+        Add("memory.modules", "memory-fixture", "Módulo fixture", AuditClassification.AppliedUnproven,
+            facts: new Dictionary<string, string> { ["Capacity"] = "8589934592", ["ConfiguredTransferRateMTs"] = "2933" });
+        Add("nvidia.fixture", "game-fixture", "VALORANT fixture", AuditClassification.AppliedUnproven);
+        return new(DateTimeOffset.UtcNow, "Dados sintéticos somente para validar a interface.", rows, ["Fixture; no hardware accessed"]);
+    }
+
     private static Task RunFixture(MainViewModel vm, string id, Func<IProgress<TestProgress>, CancellationToken, Task<TechnicalResult>> run)
     {
         var execute = typeof(MainViewModel).GetMethod("RunTestAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;

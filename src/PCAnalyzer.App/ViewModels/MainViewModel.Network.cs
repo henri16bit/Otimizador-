@@ -21,7 +21,23 @@ public sealed partial class MainViewModel
     private Task? _automaticNetworkTask;
     private bool _networkDiscovered, _selectingNetwork, _automaticNetworkInProgress;
     private Guid? _lastAutomaticAdapter;
+    private bool _showAllNetworkAdapters;
     public ObservableCollection<NetworkAdapterRow> NetworkAdapters { get; } = [];
+    public bool ShowAllNetworkAdapters { get => _showAllNetworkAdapters; set { if (Set(ref _showAllNetworkAdapters, value)) RefreshAdapterVisibility(); } }
+    public IEnumerable<NetworkAdapterRow> VisibleNetworkAdapters => ShowAllNetworkAdapters ? NetworkAdapters : NetworkAdapters.Where(a => !KnownVirtualAdapter(a));
+    public string CompactNetworkReadStatus => _automaticNetworkInProgress ? "Consultando o driver…" :
+        SelectedAdapter is null ? "Nenhuma conexão selecionada." : NetworkFacts.Count == 0 && NetworkSettings.Count == 0 ?
+        "Leitura ainda indisponível. Consulte os detalhes ou recarregue." : "Configurações disponíveis para consulta; detalhes e limites abaixo.";
+    private bool KnownVirtualAdapter(NetworkAdapterRow adapter) => adapter.Adapter.Type is "Loopback" or "Tunnel" ||
+        _auditSettings.SelectMany(r => r.Evidence).Any(a => Guid.TryParse(a.Observation.Facts.GetValueOrDefault("InterfaceGuid"), out var id) && id == adapter.Id &&
+            bool.TryParse(a.Observation.Facts.GetValueOrDefault("HardwareInterface"), out var hardware) && !hardware);
+    private void RefreshAdapterVisibility()
+    {
+        Notify(nameof(VisibleNetworkAdapters));
+        if (!ShowAllNetworkAdapters && SelectedAdapter is { } selected && KnownVirtualAdapter(selected))
+            SelectedAdapter = VisibleNetworkAdapters.FirstOrDefault(a => a.Adapter.Status == "Up" && a.Adapter.Gateways.Count > 0) ?? VisibleNetworkAdapters.FirstOrDefault();
+        RefreshCategoryGroups(); FilterAuditSettings();
+    }
     public ObservableCollection<HardwareRow> NetworkFacts { get; } = [];
     public NetworkAdapterRow? SelectedAdapter
     {
@@ -32,10 +48,12 @@ public sealed partial class MainViewModel
             NetworkFacts.Clear(); NetworkSettings.Clear(); SelectedNetworkSetting = null;
             NetworkDriver = "Aguardando a leitura do adaptador escolhido…";
             InspectNetworkCommand?.Refresh(); Notify(nameof(NetworkSelectionNote));
+            RefreshCategoryGroups(); FilterAuditSettings();
+            Notify(nameof(CompactNetworkReadStatus));
             if (!_selectingNetwork) EnsureNetworkLoaded();
         }
     }
-    public string NetworkReadStatus { get => _networkReadStatus; private set => Set(ref _networkReadStatus, value); }
+    public string NetworkReadStatus { get => _networkReadStatus; private set { Set(ref _networkReadStatus, value); Notify(nameof(CompactNetworkReadStatus)); } }
     public string NetworkDriver { get => _networkDriver; private set => Set(ref _networkDriver, value); }
     public string NetworkSelectionNote => SelectedAdapter is { } a ? $"{a.State} · link {a.Link} · gateway {a.Gateway}" : "Nenhum adaptador selecionado.";
     public string NetworkSettingState => SelectedNetworkSetting?.Status ?? "Selecione uma propriedade para entender sua função.";
@@ -91,11 +109,12 @@ public sealed partial class MainViewModel
             _networkDiscovered = true;
             var previous = SelectedAdapter?.Id;
             Replace(NetworkAdapters, snapshot.Adapters.OrderByDescending(a => a.Status == "Up").ThenBy(a => a.Name).Select(a => new NetworkAdapterRow(a)));
+            Notify(nameof(VisibleNetworkAdapters));
             _selectingNetwork = true;
             try
             {
-                SelectedAdapter = NetworkAdapters.FirstOrDefault(a => a.Id == previous)
-                    ?? NetworkAdapters.FirstOrDefault(a => a.Adapter.Status == "Up" && a.Adapter.Gateways.Count > 0) ?? NetworkAdapters.FirstOrDefault();
+                SelectedAdapter = VisibleNetworkAdapters.FirstOrDefault(a => a.Id == previous)
+                    ?? VisibleNetworkAdapters.FirstOrDefault(a => a.Adapter.Status == "Up" && a.Adapter.Gateways.Count > 0) ?? VisibleNetworkAdapters.FirstOrDefault();
             }
             finally { _selectingNetwork = false; }
             NetworkReadStatus = NetworkAdapters.Count > 0 ? $"{NetworkAdapters.Count} conexão(ões). A conexão ativa foi selecionada; você pode escolher outra. Nenhuma configuração foi alterada." :
@@ -128,7 +147,7 @@ public sealed partial class MainViewModel
             NetworkReadStatus = detail.Status == Availability.Available
                 ? $"Leitura concluída · {NetworkSettings.Count} propriedades. " + (detail.Limitations.Count == 0 ? "Nenhuma alteração aplicada." : "Algumas fontes faltam: " + string.Join("; ", detail.Limitations))
                 : AvailabilityLabel(detail.Status) + ": " + string.Join("; ", detail.Limitations);
-            Notification = NetworkReadStatus;
+            Notification = CompactNetworkReadStatus;
         }
         catch (Exception ex)
         {

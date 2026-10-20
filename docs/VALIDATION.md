@@ -1,5 +1,13 @@
 # Validação executada
 
+## Experiência de auditoria por categoria — 20/10/2026
+
+Implementação incremental sobre `e133353`, preservando os coletores e os limites de somente leitura. Compilação Release com `-warnaserror` sem erros ou avisos e **404 testes C# aprovados**, zero falhas/ignorados (`artifacts/test-results/experience.trx`). As 16 fixtures PowerShell executam o script real de consulta com cmdlets substituídos; todas passaram, incluindo identidade ambígua, comando ausente, fonte sem suporte e falha real sem mascaramento.
+
+A publicação exige 39 cenários WPF, navegação nas dez categorias, 11 páginas internas e sete abas de ferramentas preservadas, abertura do pacote e verificação real no Windows. As novas regressões cobrem filtros, modal/teclado, lista com 1.100 itens virtualizados, contexto de resultados por categoria e dimensões lógicas equivalentes a 100%, 125% e 150%. A evidência remota será registrada por commit antes de declarar a versão publicada.
+
+Arquivos, componentes e limites: [AUDIT-EXPERIENCE.md](AUDIT-EXPERIENCE.md). Os registros abaixo pertencem às versões anteriores.
+
 ## Auditoria e consultoria somente leitura — 18/10/2026
 
 Validação local da nova versão: restore com lockfiles; reconstrução completa Release com `-warnaserror`, zero avisos/erros; **352 testes C# aprovados**, zero falhas/ignorados (`artifacts/test-results/consultancy.trx`). Cinco testes Python de pacote, cinco cenários PowerShell de publicação e **oito cenários do script real de leitura de rede com cmdlets substituídos** aprovados.

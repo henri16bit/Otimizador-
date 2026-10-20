@@ -199,7 +199,7 @@ public sealed partial class MainViewModel
         "general" => StartAnalysisAsync(false),
         "gaming-analysis" => StartAnalysisAsync(true),
         "system" => RunTestAsync("system", ObserveSystemAsync),
-        "ping" => RunTestAsync("ping", (progress, ct) => _backend.PingAsync(PingHost.Trim(), SelectedAdapter?.Id, progress, ct)),
+        "ping" => RunPingAsync(),
         "cpu" or "ram" or "memory-access" or "disk-read" => LabAsync(SelectedTest.Id),
         "frames" => CaptureFramesAsync(), "frames-import" => ImportFramesAsync(),
         "dpc" => CaptureDpcAsync(), "etl-import" => ImportEtlAsync(),
@@ -228,6 +228,8 @@ public sealed partial class MainViewModel
     {
         var definition = DiagnosticDefinitions.FirstOrDefault(d => d.Id == id) ?? TestCatalog.Get(id);
         var started = DateTimeOffset.UtcNow;
+        var selectionContext = id == "ping" ? "Destino solicitado: " + PingHost.Trim() + "; a rota usada é decidida pelo Windows. A seleção de adaptador orienta a descoberta do gateway." :
+            id is "frames-import" or "etl-import" ? "Captura importada; não representa o estado atual deste PC." : "Medição manual desta execução; compare condições equivalentes.";
         var importedCapture = id is "frames-import" or "etl-import";
         var context = new SessionContext(Workload, Mode, IntervalSeconds, Notes);
         if (id == "system") context = context with { CollectionMode = "Diagnóstico manual", IntervalSeconds = 1,
@@ -242,11 +244,12 @@ public sealed partial class MainViewModel
                 "O arquivo não identifica de forma verificável todo o hardware de origem.")]);
         }
         Notification = definition.Name + " iniciado. Acompanhe aqui ou continue navegando.";
-        if (id is "general" or "gaming-analysis" or "audit.configuration") ClearOpenedResult();
+        if (id is "general" or "gaming-analysis" or "audit.configuration") { ClearOpenedResult(); ResetAuditSettings(); }
+        ClearCategoryResult(id);
         ExecutionLog.Clear();
         var run = await _execution.ExecuteAsync(definition, async (progress, ct) =>
         {
-            var result = await execute(progress, ct);
+            var result = (await execute(progress, ct)) with { SelectionContext = selectionContext };
             progress.Report(new("Organizando evidências e resultado"));
             // Coordinated analyses already own their inventory, observation window, processes,
             // findings and change context. Do not rebuild that session from the passive buffer.
@@ -308,6 +311,8 @@ public sealed partial class MainViewModel
     }
     private void DisplayTestResult(TestSession run)
     {
+        if (run.Result?.Audit is not null) _auditSettingsRun = run;
+        RememberCategoryResult(run);
         SelectedFinding = null;
         _findingFromResult = true;
         _openedTest = run;
@@ -364,9 +369,10 @@ public sealed partial class MainViewModel
         await ShowResultAsync(Task.FromResult(result));
         ResultTab = 1; Navigate("resultados");
     }
-    private async Task ExportTestAsync()
+    private Task ExportTestAsync() => ExportRunAsync(_openedTest);
+    private async Task ExportRunAsync(TestSession? run)
     {
-        if (_openedTest is not { } run) return;
+        if (run is null) return;
         var dialog = new SaveFileDialog { Filter = "Relatório de teste HTML|*.html|Resultado completo JSON|*.json", FileName = $"PCAnalyzer-teste-{run.StartedAt:yyyyMMdd-HHmmss}.html" };
         if (dialog.ShowDialog() != true) return;
         await TestReportExporter.ExportAsync(run, dialog.FileName, Anonymize, OperationToken);

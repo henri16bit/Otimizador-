@@ -157,12 +157,15 @@ public sealed class TestExecutionTests
     {
         var now = DateTimeOffset.UtcNow;
         var result = new TechnicalResult("test", [@"C:\Users\Alice\trace.csv IP=192.168.3.42 <script>"],
-            Series: [new("host=private-machine", "ms", [new(10, 123.5)], "relative", "token=secret-value")]);
+            Series: [new("host=private-machine", "ms", [new(10, 123.5)], "relative", "token=secret-value")],
+            SelectionContext: "Destino solicitado: private.internal.example");
         var run = new TestSession(Guid.NewGuid(), "cpu", "CPU", TestStatus.Completed, now, now, new("end"), result);
         var json = TestReportExporter.ExportJson(run); var html = TestReportExporter.ExportHtml(run);
         Assert.DoesNotContain("Alice", json); Assert.DoesNotContain("192.168.3.42", json); Assert.DoesNotContain("secret-value", json);
         Assert.Contains("123.5", json); Assert.DoesNotContain("<script>", html); Assert.Contains("&lt;script&gt;", html);
         Assert.Contains("Alice", TestReportExporter.ExportJson(run, false));
+        Assert.DoesNotContain("private.internal.example", json);
+        Assert.Contains("private.internal.example", TestReportExporter.ExportJson(run, false));
     }
 
     [Fact]

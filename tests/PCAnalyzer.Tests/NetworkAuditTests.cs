@@ -65,6 +65,92 @@ public sealed class NetworkAuditTests
     }
 
     [Fact]
+    public void UnsupportedPowerCapabilityIsNotPresentedAsAnAvailableSetting()
+    {
+        using var json = JsonDocument.Parse($$$"""
+            {"Identity":{"InterfaceGuid":"{{{AdapterId:D}}}"},"Power":{
+              "SelectiveSuspend":"Unsupported","WakeOnMagicPacket":"Enabled","ArpOffload":""}}
+            """);
+        var detail = NetworkInspector.ParseAdapter(AdapterId, json.RootElement);
+        var unsupported = detail.PowerManagement!.Single(f => f.Name == "SelectiveSuspend");
+        Assert.Equal(Availability.Unsupported, unsupported.Status);
+        Assert.Equal("Unsupported", unsupported.Value);
+        Assert.Contains("não é suportada", unsupported.Limitation);
+        Assert.Equal(Availability.Available, detail.PowerManagement!.Single(f => f.Name == "WakeOnMagicPacket").Status);
+        Assert.Equal(Availability.Unsupported, detail.PowerManagement!.Single(f => f.Name == "ArpOffload").Status);
+        Assert.Equal(Availability.Unsupported, NetworkConfigurationAuditProvider.FromAdapter(Adapter(), detail)
+            .Single(o => o.RuleId == "network.power" && o.Name == "SelectiveSuspend").Status);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void EveryAdapterRowCarriesVerifiedPhysicalConnectionContext(bool hardwareInterface)
+    {
+        using var json = JsonDocument.Parse($$$"""
+            {"Identity":{"InterfaceGuid":"{{{AdapterId:D}}}","HardwareInterface":{{{hardwareInterface.ToString().ToLowerInvariant()}}}},
+             "Properties":[{"RegistryKeyword":"*RSS","RegistryValue":["1"]}],
+             "Rss":{"Enabled":true},"Power":{"WakeOnMagicPacket":"Unsupported"},"Statistics":{"ReceivedBytes":0}}
+            """);
+        var detail = NetworkInspector.ParseAdapter(AdapterId, json.RootElement);
+        var observations = NetworkConfigurationAuditProvider.FromAdapter(Adapter() with { Gateways = ["192.0.2.1"] }, detail);
+        Assert.Equal(5, observations.Count);
+        Assert.All(observations, observation =>
+        {
+            Assert.Equal(AdapterId.ToString("D"), observation.Facts["InterfaceGuid"]);
+            Assert.Equal(hardwareInterface.ToString(), observation.Facts["HardwareInterface"]);
+            Assert.Equal("Up", observation.Facts["AdapterStatus"]);
+            Assert.Equal("Ethernet", observation.Facts["AdapterType"]);
+            Assert.Equal("true", observation.Facts["HasGateway"]);
+        });
+    }
+
+    [Fact]
+    public void FailedAdapterReadKeepsDiscoveredContextWithoutGuessingPhysicalIdentity()
+    {
+        var detail = new AdapterDetail(AdapterId, "", "", null, null, null, null, [], [], [], Availability.ToolMissing, ["Missing cmdlet"]);
+        var observations = NetworkConfigurationAuditProvider.FromAdapter(Adapter() with { Status = "Down", Gateways = ["0.0.0.0", "::"] }, detail);
+        Assert.Equal(5, observations.Count);
+        Assert.All(observations, observation =>
+        {
+            Assert.Equal(Availability.ToolMissing, observation.Status);
+            Assert.Equal("não informado", observation.Facts["HardwareInterface"]);
+            Assert.Equal("Down", observation.Facts["AdapterStatus"]);
+            Assert.Equal("false", observation.Facts["HasGateway"]);
+        });
+    }
+
+    [Theory]
+    [InlineData("{\"Error\":{\"Status\":\"ToolMissing\"}}", Availability.ToolMissing)]
+    [InlineData("{\"Error\":{\"Status\":\"Unsupported\"}}", Availability.Unsupported)]
+    [InlineData("{\"Error\":{\"Status\":\"PermissionRequired\"}}", Availability.PermissionRequired)]
+    [InlineData("{\"Error\":{\"Status\":\"Available\"}}", Availability.ReadError)]
+    [InlineData("{\"Error\":{\"Status\":\"NotAState\"}}", Availability.ReadError)]
+    [InlineData("[]", Availability.ReadError)]
+    [InlineData("invalid json", Availability.ReadError)]
+    public void StructuredQueryFailuresKeepTheirStatusWhileUnknownFailuresRemainErrors(string output, Availability expected) =>
+        Assert.Equal(expected, NetworkInspector.ReadFailureStatus(output));
+
+    [Theory]
+    [InlineData("{\"Tcp\":[]}")]
+    [InlineData("{\"Tcp\":[{\"SettingName\":\"Internet\"}]}")]
+    public void EmptyTcpProfilesReportMissingEvidence(string output)
+    {
+        using var json = JsonDocument.Parse(output);
+        Assert.Equal(Availability.InsufficientData, Assert.Single(NetworkInspector.ParseTcp(json.RootElement)).Status);
+    }
+
+    [Fact]
+    public void TcpBlankFieldsAreUnavailableButZeroValuesRemainAvailable()
+    {
+        using var json = JsonDocument.Parse("""{"Tcp":[{"SettingName":"Internet","MinRtoMs":0,"CongestionProvider":" ","EcnCapability":null}]}""");
+        var facts = NetworkInspector.ParseTcp(json.RootElement);
+        Assert.Equal(Availability.Available, facts.Single(f => f.Name.EndsWith("MinRtoMs", StringComparison.Ordinal)).Status);
+        Assert.Equal("0", facts.Single(f => f.Name.EndsWith("MinRtoMs", StringComparison.Ordinal)).Value);
+        Assert.Equal(2, facts.Count(f => f.Status == Availability.Unsupported && f.Value is null));
+    }
+
+    [Fact]
     public void ClixmlErrorsAreDecodedWithoutProgressOrXmlInTheMessage()
     {
         const string clixml = """

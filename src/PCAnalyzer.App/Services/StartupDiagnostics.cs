@@ -23,9 +23,9 @@ internal sealed class StartupDiagnostics
             ? arguments[outputIndex + 1] : Path.Combine(Path.GetTempPath(), "PCAnalyzer-smoke-result.json");
     }
 
-    public void ReportSmokeSuccess(int views, int detailViews) => WriteSmokeResult(new
+    public void ReportSmokeSuccess(int views, int detailViews, int categoryViews) => WriteSmokeResult(new
     {
-        success = true, views, detailViews, compactLayoutChecked = true, passiveHardwareStarted = false, timestamp = DateTimeOffset.UtcNow
+        success = true, views, detailViews, categoryViews, compactLayoutChecked = true, passiveHardwareStarted = false, timestamp = DateTimeOffset.UtcNow
     });
 
     public void CaptureView(FrameworkElement element, string name)

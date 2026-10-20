@@ -86,7 +86,10 @@ public sealed class PerformanceAuditEngine
         }
         if (rule.Id == "devices.identity" && uint.TryParse(observation.Facts.GetValueOrDefault("pnpProblemCode"),
                 NumberStyles.Integer, CultureInfo.InvariantCulture, out var problemCode))
-            return problemCode == 0
+            return problemCode == 22
+                ? Result(AuditClassification.AppliedUnproven, "Dispositivo desabilitado no Windows",
+                    "Código PnP 22 informa que o dispositivo está desabilitado. Isso pode ser intencional; não comprova perda de desempenho. Investigar somente se o dispositivo for necessário ao cenário avaliado.", Confidence.High)
+                : problemCode == 0
                 ? Result(AuditClassification.Adequate, "Nenhum código de problema PnP informado",
                     "O Configuration Manager reportou código 0 para o dispositivo. Isso não avalia qualidade do driver, DPC/ISR, latência ou adequação das suas configurações.", Confidence.High)
                 : Result(AuditClassification.PossibleProblem, "O Windows informou um código de problema PnP",

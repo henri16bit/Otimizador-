@@ -43,6 +43,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 {
     private const int SessionSampleLimit = 30_000;
     private readonly IApplicationBackend _backend;
+    private readonly Func<string, string, bool>? _confirmation;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly object _sampleLock = new();
     private readonly List<MetricSample> _samples = [];
@@ -85,12 +86,13 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private string _metricFilter = "", _sessionLabel = "Diagnóstico local", _workload = "Desktop em repouso / informar condição", _notes = "", _pingHost = "gateway", _processIdText = "";
     private bool _anonymize = true;
 
-    public MainViewModel(IApplicationBackend backend)
+    public MainViewModel(IApplicationBackend backend, Func<string, string, bool>? confirmation = null)
     {
         _backend = backend;
+        _confirmation = confirmation;
         _execution = new TestExecutionService(backend, backend.LogError);
         _execution.Changed += OnExecutionChanged;
-        Sections = [new("dashboard", "Painel", "\uE80F", 0, "Analise seu PC e veja o próximo passo."),
+        Sections = [new("dashboard", "Início", "\uE80F", 0, "Auditoria de desempenho e latência."),
             new("componentes", "Componentes", "\uE950", 1, "Escolha um componente para ver suas leituras e seu histórico."),
             new("processos", "Processos", "\uE9D9", 2, "Encontre os aplicativos que estão usando CPU e memória."),
             new("investigar", "Investigar", "\uE721", 3, "Escolha um teste de acordo com o problema observado."),
@@ -99,7 +101,14 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             new("ajustes", "Recomendações", "\uE9E9", 6, "Entenda as configurações, evidências e próximos testes. Somente consulta."),
             new("config", "Configurações", "\uE713", 7, "Consulte as fontes e ajuste a coleta."),
             new("analisar", "Analisar", "\uE721", 8, "Observe o PC durante o problema e receba um relatório."),
-            new("avancado", "Avançado", "\uE950", 9, "Ferramentas para investigar uma medição específica.")];
+            new("avancado", "Avançado", "\uE950", 9, "Inventário, histórico, evidências e ferramentas."),
+            new("windows", "Windows", "\uE782", 10, "Agendamento, energia e políticas do sistema."),
+            new("nvidia", "NVIDIA", "\uE7F4", 10, "Configurações globais e perfis detectados do driver."),
+            new("network", "Rede", "\uE968", 10, "Entenda a conexão e meça sua resposta."),
+            new("devices", "MSI / IRQ / USB", "\uE88E", 10, "Interrupções, afinidade e dispositivos. Somente leitura."),
+            new("latency", "Latência", "\uE9D9", 10, "Escolha uma medição. Cada resultado tem seu próprio alcance."),
+            new("hardware", "Hardware", "\uE950", 10, "CPU, memória e discos realmente identificados."),
+            new("games", "Jogos", "\uE7FC", 10, "Perfis detectados e captura opcional de quadros.")];
         ComponentChoices = [new("cpu", "Processador (CPU)", "CPU"), new("gpu", "Placa de vídeo (GPU)", "GPU"),
             new("ram", "Memória (RAM)", "RAM"), new("nvme", "Discos e NVMe", "Disco"), new("rede", "Rede", "Rede"), new("todos", "Todos os componentes", null)];
         _section = Sections[0];
@@ -122,7 +131,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         ExportJsonCommand = Command(() => ExportAsync("json"));
         ExportCsvCommand = Command(() => ExportAsync("csv"));
         ExportHtmlCommand = Command(() => ExportAsync("html"));
-        PingCommand = Command(() => RunTestAsync("ping", (progress, ct) => _backend.PingAsync(PingHost.Trim(), SelectedAdapter?.Id, progress, ct)), () => !string.IsNullOrWhiteSpace(PingHost));
+        PingCommand = Command(RunPingAsync, () => !string.IsNullOrWhiteSpace(PingHost));
         ImportFramesCommand = Command(ImportFramesAsync);
         CaptureFramesCommand = Command(CaptureFramesAsync, () => int.TryParse(ProcessIdText, out var pid) && pid > 0);
         CaptureDpcCommand = Command(CaptureDpcAsync);
@@ -143,6 +152,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         InitializeDiagnosticCommands();
         InitializeNetworkCommands();
         InitializeAnalysisCommands();
+        InitializeExperienceCommands();
     }
 
     public IReadOnlyList<Section> Sections { get; }
@@ -193,7 +203,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     };
     public string SelectedFindingConfidence => SelectedFinding?.Confidence switch { Confidence.High => "Alta", Confidence.Medium => "Média", Confidence.Low => "Baixa", _ => "—" };
     public string DataDirectory => _backend.DataDirectory;
-    public bool IsBusy { get => _isBusy; private set { Set(ref _isBusy, value); RefreshCommands(); CancelCommand.Refresh(); if (!value && SelectedSection?.Id is "investigar" or "ajustes") EnsureNetworkLoaded(); } }
+    public bool IsBusy { get => _isBusy; private set { Set(ref _isBusy, value); RefreshCommands(); CancelCommand.Refresh(); if (!value && SelectedSection?.Id is "investigar" or "network") EnsureNetworkLoaded(); } }
     public bool IsMinimized { get => _minimized; set => _minimized = value; }
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string OperationText { get => _operationText; private set => Set(ref _operationText, value); }
@@ -213,7 +223,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public int ContentTab { get => _contentTab; private set => Set(ref _contentTab, value); }
     public int ResultTab { get => _resultTab; set => Set(ref _resultTab, value); }
     public int InvestigationTab { get => _investigationTab; set => Set(ref _investigationTab, value); }
-    public Section? SelectedSection { get => _section; set { if (value is not null && Set(ref _section, value)) { ContentTab = value.Tab; Notify(nameof(PageTitle)); Notify(nameof(PageDescription)); Notify(nameof(MenuSelection)); Notify(nameof(HeaderIsAdvancedView)); if (value.Id is "investigar" or "ajustes") EnsureNetworkLoaded(); } } }
+    public Section? SelectedSection { get => _section; set { if (value is not null && value != _section) { SaveCategoryFilters(); Set(ref _section, value); ContentTab = value.Tab; Notify(nameof(PageTitle)); Notify(nameof(PageDescription)); Notify(nameof(MenuSelection)); Notify(nameof(HeaderIsAdvancedView)); RefreshCategory(); if (value.Id is "investigar" or "network") EnsureNetworkLoaded(); } } }
     public ComponentChoice? SelectedComponent { get => _component; set { if (Set(ref _component, value)) { MetricFilter = ""; RefreshDisplay(); Notify(nameof(IsStorageComponent)); } } }
     public MetricRow? SelectedMetric { get => _selectedMetric; set { if (Set(ref _selectedMetric, value)) RefreshChart(); } }
     public ProcessRow? SelectedProcess { get => _selectedProcess; set { if (Set(ref _selectedProcess, value)) ProcessIdText = value?.Id.ToString(CultureInfo.InvariantCulture) ?? ""; } }
@@ -498,7 +508,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private void RecordFailure(string operation, Exception ex)
     {
         ClearOpenedResult();
-        _backend.LogError(operation, ex); Status = $"{operation}: {ex.Message}";
+        _backend.LogError(operation, ex); Status = $"{operation}: não foi possível concluir. Consulte os detalhes técnicos.";
         OperationTitle = $"Falha · {operation}";
         Notification = Status;
         Replace(ResultSeries, []); SelectedRelativeSeries = null; Notify(nameof(HasRelativeSeries));
@@ -568,10 +578,15 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private async Task CaptureFramesAsync()
     {
         if (!int.TryParse(ProcessIdText, out var pid) || pid <= 0) throw new InvalidOperationException("Selecione um processo ou informe um PID positivo.");
-        var dialog = new OpenFileDialog { Filter = "PresentMon oficial|*.exe", Title = "Selecionar PresentMon Console obtido do projeto oficial", CheckFileExists = true };
-        if (dialog.ShowDialog() != true) return;
-        if (!Confirm("GameSession · captura manual de 30 s", $"Executável selecionado:\n{dialog.FileName}\nPID alvo: {pid}\n\nSerá executada uma captura externa limitada a 30 s, sem overlay ou injeção de código. A compatibilidade com Vanguard não foi validada nesta máquina e não é garantida. Use importação de CSV se preferir analisar uma captura existente. A operação pode exigir permissões adicionais e acrescentar overhead.\n\nIniciar captura agora?")) return;
-        await RunTestAsync("frames", (progress, ct) => { progress.Report(new("Capturando frames · até 30 s; aguardando o PresentMon")); return _backend.CaptureFramesAsync(dialog.FileName, pid, ct); });
+        var executable = PresentMonPath;
+        if (string.IsNullOrWhiteSpace(executable))
+        {
+            await ConfigurePresentMonAsync();
+            executable = PresentMonPath;
+            if (string.IsNullOrWhiteSpace(executable)) return;
+        }
+        if (!Confirm("Captura manual de quadros", $"Capturar o processo {pid} por 30 segundos com PresentMon. A captura é externa, sem overlay ou injeção, e pode acrescentar custo ao PC.\n\nIniciar captura?")) return;
+        await RunTestAsync("frames", (progress, ct) => { progress.Report(new("Capturando frames · até 30 s; aguardando o PresentMon")); return _backend.CaptureFramesAsync(executable, pid, ct); });
     }
     private async Task ImportEtlAsync()
     {
@@ -602,7 +617,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         await RunTestAsync(test, (progress, ct) => _backend.RunLabAsync(test, path,
             new InlineProgress<double>(value => progress.Report(new(test == "cpu" ? "Carga de CPU" : test is "ram" or "memory-access" ? "Teste de buffers de memória" : "Lendo arquivo", value))), ct));
     }
-    private static bool Confirm(string title, string text) => MessageBox.Show(Application.Current.MainWindow, text, title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+    private bool Confirm(string title, string text) => _confirmation?.Invoke(title, text) ?? MessageBox.Show(Application.Current.MainWindow, text, title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     private string PreferencesPath => Path.Combine(DataDirectory, "collection-settings.json");
     private async Task LoadPreferencesAsync()
     {

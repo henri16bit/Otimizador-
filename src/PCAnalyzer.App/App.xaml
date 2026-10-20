@@ -7,16 +7,16 @@
         <vm:AvailabilityConverter x:Key="AvailabilityLabel"/>
         <vm:ChangeLabelConverter x:Key="ChangeLabel"/>
         <vm:DiagnosticLabelConverter x:Key="DiagnosticLabel"/>
-        <SolidColorBrush x:Key="Background" Color="#0C121D"/>
-        <SolidColorBrush x:Key="Surface" Color="#151E2D"/>
-        <SolidColorBrush x:Key="SurfaceHigh" Color="#1D2A3D"/>
-        <SolidColorBrush x:Key="Stroke" Color="#2A3850"/>
-        <SolidColorBrush x:Key="Text" Color="#EEF3FC"/>
-        <SolidColorBrush x:Key="Muted" Color="#A2B0C7"/>
-        <SolidColorBrush x:Key="Accent" Color="#78A8FF"/>
-        <SolidColorBrush x:Key="Success" Color="#63D6BD"/>
-        <SolidColorBrush x:Key="Attention" Color="#F2C56B"/>
-        <SolidColorBrush x:Key="Problem" Color="#FF9696"/>
+        <SolidColorBrush x:Key="Background" Color="#0B0B0D"/>
+        <SolidColorBrush x:Key="Surface" Color="#141417"/>
+        <SolidColorBrush x:Key="SurfaceHigh" Color="#19191D"/>
+        <SolidColorBrush x:Key="Stroke" Color="#29292F"/>
+        <SolidColorBrush x:Key="Text" Color="#F5F5F5"/>
+        <SolidColorBrush x:Key="Muted" Color="#A3A3AB"/>
+        <SolidColorBrush x:Key="Accent" Color="#DADAE0"/>
+        <SolidColorBrush x:Key="Success" Color="#8CBD9C"/>
+        <SolidColorBrush x:Key="Attention" Color="#D8BB7C"/>
+        <SolidColorBrush x:Key="Problem" Color="#D99393"/>
         <Style x:Key="KeyboardFocus">
             <Setter Property="Control.Template"><Setter.Value><ControlTemplate><Border BorderBrush="{StaticResource Accent}" BorderThickness="2" CornerRadius="7" Margin="-3"/></ControlTemplate></Setter.Value></Setter>
         </Style>
@@ -30,12 +30,12 @@
             <Setter Property="LineHeight" Value="23"/><Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
         <Style x:Key="SectionTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="22"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,0,0,10"/><Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="FontSize" Value="20"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,0,0,10"/><Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource Surface}"/><Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
-            <Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="12"/>
-            <Setter Property="Padding" Value="20"/><Setter Property="Margin" Value="0,0,0,16"/>
+            <Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16"/><Setter Property="Margin" Value="0,0,0,16"/>
         </Style>
         <Style TargetType="Button">
             <Setter Property="Foreground" Value="{StaticResource Text}"/><Setter Property="Background" Value="{StaticResource SurfaceHigh}"/>
@@ -53,17 +53,17 @@
             </Setter.Value></Setter>
         </Style>
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#2C62CC"/><Setter Property="BorderBrush" Value="#528BEE"/><Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="#E5E5E9"/><Setter Property="BorderBrush" Value="#E5E5E9"/><Setter Property="Foreground" Value="#141417"/><Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="{StaticResource Muted}"/>
         </Style>
         <Style TargetType="TextBox">
-            <Setter Property="Foreground" Value="{StaticResource Text}"/><Setter Property="Background" Value="#101827"/><Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/><Setter Property="Background" Value="#101012"/><Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
             <Setter Property="CaretBrush" Value="{StaticResource Accent}"/><Setter Property="Padding" Value="10,8"/><Setter Property="MinHeight" Value="38"/><Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
         <Style TargetType="ComboBox">
-            <Setter Property="Foreground" Value="{StaticResource Text}"/><Setter Property="Background" Value="#101827"/><Setter Property="MinHeight" Value="38"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/><Setter Property="Background" Value="#101012"/><Setter Property="MinHeight" Value="38"/>
             <Setter Property="Margin" Value="0,0,0,12"/><Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
             <Setter Property="Template"><Setter.Value>
                 <ControlTemplate TargetType="ComboBox">
@@ -88,7 +88,7 @@
             <Setter Property="Template"><Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
                     <Border x:Name="ItemBorder" CornerRadius="4" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border>
-                    <ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#304564"/></Trigger></ControlTemplate.Triggers>
+                    <ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#303035"/></Trigger></ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value></Setter>
         </Style>
@@ -125,7 +125,7 @@
                 <ControlTemplate TargetType="ListBoxItem">
                     <Border x:Name="ListItemBorder" Background="{TemplateBinding Background}" CornerRadius="7" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsSelected" Value="True"><Setter TargetName="ListItemBorder" Property="Background" Value="#223653"/></Trigger>
+                        <Trigger Property="IsSelected" Value="True"><Setter TargetName="ListItemBorder" Property="Background" Value="#29292F"/></Trigger>
                         <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="IsSelected" Value="False"/></MultiTrigger.Conditions><Setter TargetName="ListItemBorder" Property="Background" Value="{StaticResource SurfaceHigh}"/></MultiTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -133,24 +133,24 @@
         </Style>
         <Style TargetType="DataGrid">
             <Setter Property="Foreground" Value="{StaticResource Text}"/><Setter Property="Background" Value="{StaticResource Surface}"/>
-            <Setter Property="RowBackground" Value="{StaticResource Surface}"/><Setter Property="AlternatingRowBackground" Value="#192435"/>
-            <Setter Property="BorderThickness" Value="0"/><Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="HorizontalGridLinesBrush" Value="#243248"/>
+            <Setter Property="RowBackground" Value="{StaticResource Surface}"/><Setter Property="AlternatingRowBackground" Value="#19191D"/>
+            <Setter Property="BorderThickness" Value="0"/><Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="HorizontalGridLinesBrush" Value="#29292F"/>
             <Setter Property="HeadersVisibility" Value="Column"/><Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="IsReadOnly" Value="True"/>
             <Setter Property="CanUserAddRows" Value="False"/><Setter Property="CanUserDeleteRows" Value="False"/><Setter Property="EnableRowVirtualization" Value="True"/>
             <Setter Property="EnableColumnVirtualization" Value="True"/><Setter Property="SelectionMode" Value="Single"/><Setter Property="RowHeight" Value="40"/><Setter Property="ColumnHeaderHeight" Value="40"/>
         </Style>
         <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="Background" Value="#1C293B"/><Setter Property="Padding" Value="10"/><Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="Background" Value="#19191D"/><Setter Property="Padding" Value="10"/><Setter Property="BorderThickness" Value="0"/>
         </Style>
         <Style TargetType="DataGridCell">
             <Setter Property="Padding" Value="8,6"/><Setter Property="BorderThickness" Value="0"/>
-            <Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#263E5E"/><Setter Property="Foreground" Value="{StaticResource Text}"/></Trigger></Style.Triggers>
+            <Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#333338"/><Setter Property="Foreground" Value="{StaticResource Text}"/></Trigger></Style.Triggers>
         </Style>
         <Style TargetType="ToolTip"><Setter Property="Foreground" Value="{StaticResource Text}"/><Setter Property="Background" Value="{StaticResource SurfaceHigh}"/><Setter Property="MaxWidth" Value="520"/></Style>
         <Style x:Key="ScrollThumb" TargetType="Thumb">
-            <Setter Property="Background" Value="#415574"/>
+            <Setter Property="Background" Value="#49494F"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Thumb"><Border Background="{TemplateBinding Background}" CornerRadius="4" Margin="2"/></ControlTemplate></Setter.Value></Setter>
-            <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#617EA8"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter Property="Background" Value="{StaticResource Accent}"/></Trigger></Style.Triggers>
+            <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#686870"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter Property="Background" Value="{StaticResource Accent}"/></Trigger></Style.Triggers>
         </Style>
         <Style TargetType="ScrollBar">
             <Setter Property="Width" Value="12"/><Setter Property="Background" Value="Transparent"/>
