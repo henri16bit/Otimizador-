@@ -9,7 +9,7 @@ name: Publish Windows release
       tag:
         description: Existing version tag to publish
         required: true
-        default: v0.6.0-preview.4
+        default: v0.6.0-preview.5
 
 permissions:
   contents: read
@@ -83,14 +83,20 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: ./scripts/publish-release.ps1 -Tag $env:RELEASE_TAG
       - name: Preserve test results
+        id: test_archive
         if: always()
+        # Git notes below retain validation outcomes independently of the Actions quota.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: release-test-results
           path: tests/PCAnalyzer.Tests/TestResults/*.trx
           if-no-files-found: warn
+          retention-days: 7
       - name: Preserve startup verification
+        id: startup_archive
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: release-startup-results
@@ -103,6 +109,7 @@ jobs:
             artifacts/ui-flow-*.txt
             artifacts/windows-verification/**/validation-result.json
           if-no-files-found: warn
+          retention-days: 7
       - name: Record publication result for Git clients
         if: always() && steps.checkout.outcome == 'success'
         shell: pwsh

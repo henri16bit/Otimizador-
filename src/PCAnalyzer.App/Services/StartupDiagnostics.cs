@@ -35,11 +35,14 @@ internal sealed class StartupDiagnostics
         var bounds = new Rect(0, 0, element.ActualWidth, element.ActualHeight);
         // Render the element's local viewport. Rendering it directly retains its layout
         // offset (for example a modal's margin), shifting and clipping the PNG.
+        // VisualBrush also includes its root's offset in content coordinates; select that
+        // source rectangle explicitly and map it to the output viewport at the origin.
+        var offset = VisualTreeHelper.GetOffset(element);
         var brush = new VisualBrush(element)
         {
             AutoLayoutContent = false,
             ViewboxUnits = BrushMappingMode.Absolute,
-            Viewbox = bounds,
+            Viewbox = new Rect(offset.X, offset.Y, bounds.Width, bounds.Height),
             ViewportUnits = BrushMappingMode.Absolute,
             Viewport = bounds,
             Stretch = Stretch.Fill

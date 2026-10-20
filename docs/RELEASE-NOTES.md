@@ -1,4 +1,4 @@
-# PC Performance Analyzer v0.6.0-preview.4
+# PC Performance Analyzer v0.6.0-preview.5
 
 **ANALISAR MEU PC → escolher uma categoria → comparar atual e recomendação → abrir a explicação → medir quando necessário.** A auditoria existente ganha uma interface compacta, com dados reais e sem alterações nas configurações do computador.
 

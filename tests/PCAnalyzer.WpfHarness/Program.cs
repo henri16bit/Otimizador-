@@ -475,7 +475,7 @@ internal static class Program
                 var pixel = new byte[4];
                 pixels.CopyPixels(new Int32Rect((int)point.X, (int)point.Y, 1, 1), pixel, 4, 0);
                 Require(pixel.SequenceEqual(new byte[] { 0, 0, 255, 255 }),
-                    $"Capture clipped an edge at {point} when the visual had layout offset {offset}.");
+                    $"Capture clipped an edge at {point} when the visual had layout offset {offset}; BGRA={string.Join(',', pixel)}.");
             }
         }
     }
