@@ -1,36 +1,45 @@
 # Validação executada
 
-## Experiência de auditoria por categoria — 20/10/2026
+## Experiência de auditoria por categoria — v0.6.0-preview.5
 
-Implementação incremental sobre `e133353`, preservando os coletores e os limites de somente leitura. Compilação Release com `-warnaserror` sem erros ou avisos e **404 testes C# aprovados**, zero falhas/ignorados (`artifacts/test-results/experience.trx`). As 16 fixtures PowerShell executam o script real de consulta com cmdlets substituídos; todas passaram, incluindo identidade ambígua, comando ausente, fonte sem suporte e falha real sem mascaramento.
+**Publicação concluída:** [execução Windows aprovada](https://github.com/henri16bit/Otimizador-/actions/runs/39462416180), código `da11ebbc988b919cb3a9d0effdfb6a13b99b461e`, [ZIP com executável](https://github.com/henri16bit/Otimizador-/releases/download/v0.6.0-preview.5/PCAnalyzer-windows-x64.zip) e [SHA256](https://github.com/henri16bit/Otimizador-/releases/download/v0.6.0-preview.5/PCAnalyzer-windows-x64.zip.sha256). O workflow terminou com **Success**; todos os estados registrados, inclusive os dois arquivamentos de relatórios, foram aprovados. A publicação ocorreu em 20/10/2026.
 
-A publicação atual exige 41 cenários WPF, navegação nas dez categorias, 11 páginas internas e sete abas de ferramentas preservadas, abertura do pacote e verificação real no Windows. As novas regressões cobrem filtros, modal/teclado, lista com 1.100 itens virtualizados, contexto de resultados por categoria e dimensões lógicas equivalentes a 100%, 125% e 150%. A captura também verifica pixels dos quatro cantos de um elemento com deslocamentos positivos e negativos, para detectar corte causado pelo próprio gerador de imagens.
+- Restore com lockfiles e compilação Release com `-warnaserror`: zero erros e avisos.
+- **404/404 testes C#**, zero falhas/ignorados; cinco verificações de pacote, cinco de publicação e **16 cenários PowerShell** de consulta de rede aprovados.
+- **41 cenários WPF** aprovados: navegação, cancelamento, histórico, resultados na categoria correta, análise passiva em um clique, filtros, explicação/teclado, contraste/fonte e lista de 1.100 itens virtualizados. Os dados dessa suíte são fixtures; não representam medições do computador do usuário.
+- O pacote autossuficiente abriu **dez categorias, 11 páginas internas e sete abas de ferramentas**, passou no layout compacto e encerrou sem falha.
+- Verificação passiva real no runner Windows: três lotes de CPU/RAM/processo próprio, **365 métricas** e **845 avaliações** de auditoria persistidas; recarga SQLite exata e exportações JSON/CSV/HTML verificadas. Registro 32/64 bits, prioridade/afinidade do processo próprio e topologia foram confrontados com leituras independentes.
+- ZIP confirmado como `uploaded`, release fora de rascunho: **149.020.314 bytes**. SHA256: `803cd7839916bd4c6330fe02a6f46fa7248e550730381b81f283f5b14f693abd`. O arquivo de checksum disponível para download foi recuperado e coincide com esse digest.
 
-### Evidência remota já confirmada
+### Revisão visual concluída
 
-**v0.6.0-preview.1**, commit `5ebdfea4800ca9b08d797c9168c4c95c84ed4d7d`: [execução Windows](https://github.com/henri16bit/Otimizador-/actions/runs/39406735191), registrada em `refs/notes/pcanalyzer-releases`.
+Foram inspecionadas as capturas do Início, lista de configurações, explicação, resultado de rede e viewport lógico equivalente a 150%. Os textos e valores estão legíveis, e o botão Fechar aparece inteiro. O corte introduzido pelo gerador de capturas foi corrigido sem alterar o layout do produto: o `VisualBrush` usa o offset real no retângulo de origem e o mapeia para a origem da imagem. Uma regressão verifica dimensões e pixels nos quatro cantos com deslocamentos positivos e negativos, preservando os clips internos.
 
-- Restore com lockfiles e compilação sem avisos; **404/404 testes C#**, zero falhas/ignorados.
-- **39 cenários WPF** da suíte daquela versão; cinco verificações de empacotamento, cinco de publicação e 16 de rede PowerShell aprovadas.
-- Pacote abriu: dez categorias, 11 páginas internas e sete abas de ferramentas; layout compacto verificado.
-- Verificação passiva real no runner Windows aprovada. A auditoria coletou 802 observações, 683 disponíveis; campos de rede incluíram 27 erros de leitura e 43 estados sem suporte. Isso não demonstra compatibilidade de todos os campos com o driver do usuário.
-- ZIP publicado com 149.017.239 bytes e SHA256 `2bceb4b239069a8eea839c3662b07286d43a6a6a183ccb1af706ffd3ce62d8d2`.
+A suíte renderizou 1366 × 768 e 1920 × 1080, além de dimensões lógicas equivalentes a 125% e 150%. Isso verifica a pressão de layout; **não comprova escala física do Windows, troca de monitor, sensores ou hardware alvo**. A captura do Início pertence ao smoke test sem coleta de hardware; as demais usam dados de teste identificados como fixtures.
 
-A inspeção das capturas dessa versão encontrou textos com contraste insuficiente na explicação e no botão principal, apesar dos testes aprovados. A preview.1 **não representa a conclusão da revisão visual**.
+### Cobertura real e pendências
 
-### Correções finais e publicação pendente
+Foram **729 observações disponíveis**, preservando os demais estados sem preencher valores fictícios:
 
-O commit `c51f020e513e830cd40dcb8058955d1171da0827`, enviado com a tag **v0.6.0-preview.2**, corrige contraste, preservação do contexto da auditoria e estado de leitura da rede. A análise pelo Início ignora opções de testes manuais previamente selecionadas. A [execução Windows](https://github.com/henri16bit/Otimizador-/actions/runs/39407757168) aprovou as verificações do aplicativo, incluindo 404 testes C# e 40 cenários WPF, e publicou o ZIP. O workflow terminou com falha no arquivamento adicional porque a cota de artefatos do GitHub Actions estava cheia; os resultados e imagens foram recuperados pelas notas Git.
+| Provedor no runner Windows | Disponíveis / total | Estados restantes |
+| --- | --- | --- |
+| Windows | 482 / 500 | 14 exigiram permissão; quatro com dados insuficientes. |
+| Dispositivos/topologia | 18 / 20 | Dois sem suporte. |
+| Rede | 223 / 294 | 22 erros de leitura e 49 sem suporte. Não se declara que todos os campos funcionam no adaptador alvo. |
+| RAM/armazenamento | 6 / 8 | Dois com dados insuficientes. |
+| NVIDIA | 0 / 23 | 21 sem ferramenta/API; dois com dados insuficientes. DRS real não foi validada. |
 
-A **v0.6.0-preview.3**, commit `071f49f28538ea366da4e175ba7d2887bad1d037`, aplica explicitamente o estilo de janela à `MainWindow` e verifica fonte mínima no botão principal. A compilação Release dessa correção foi executada novamente com `-warnaserror`: zero erros e avisos. O commit foi enviado ao `main` e a nova tag foi enviada após o restabelecimento da autenticação GitHub.
+Permanecem pendentes a aceitação no Windows 10 Pro 22H2 do usuário, Intel I219-V, RTX 3060/NVAPI, ambos os NVMe, precisão/overhead dos sensores, capturas ETW/PresentMon em carga e DPI físico. A entrega mantém consulta somente leitura; não demonstra ganhos de FPS, input lag físico ou efeitos de ajustes.
 
-Ao revisar as capturas da preview.2, foi identificado um defeito no gerador de imagens: o bitmap mantinha a margem/deslocamento de layout do elemento, cortando o fim do viewport. A **v0.6.0-preview.4** acrescentou uma regressão que verifica dimensões e pixels dos quatro cantos com offsets positivos e negativos. O teste detectou que a primeira correção ainda mantinha esse deslocamento e bloqueou a publicação; os 404 testes C# passaram. A **preview.5** ajusta o retângulo de origem do `VisualBrush` pelo offset real e o mapeia para a origem da imagem, preservando os clips internos. Isso não modifica o layout do produto nem os coletores.
+Evidências por commit em `refs/notes/pcanalyzer-releases`; capturas em `pcanalyzer-ui-preview`, `pcanalyzer-audit-preview`, `pcanalyzer-setting-preview`, `pcanalyzer-scale-preview` e `pcanalyzer-category-result-preview`, sob `refs/notes/`. Arquivos/componentes preservados: [AUDIT-EXPERIENCE.md](AUDIT-EXPERIENCE.md).
 
-A **v0.6.0-preview.5** torna opcionais apenas as cópias adicionais de relatórios em artefatos do Actions, com retenção de sete dias. A cota cheia não invalida um executável já testado e publicado. Os estados `test_archive` e `startup_archive` passam a constar explicitamente nas notas Git; uma falha de arquivamento não é registrada como sucesso. Restore, compilação, testes, verificação real, abertura do pacote, publicação e persistência das notas continuam obrigatórios. Nenhum artefato histórico foi apagado.
+### Histórico das correções desta entrega
 
-Para concluir, exigir todas as etapas da publicação final e inspecionar as capturas completas do início, modal, lista a 150% lógico e resultado de rede. Só então registrar aqui o commit, execução, ZIP e hash finais. Aceitação em DPI físico e no hardware alvo continua separada.
+A preview.1 passou em 404 testes C# e 39 cenários WPF, mas a inspeção visual encontrou contraste insuficiente. As previews.2 e .3 corrigiram contraste/contexto e fonte da janela, passando em 404 testes C# e 40 cenários WPF e publicando os respectivos ZIPs. Seus workflows terminaram com falha no arquivamento extra por cota do Actions, apesar das verificações do aplicativo aprovadas; as notas Git preservaram resultados e imagens.
 
-Arquivos, componentes e limites: [AUDIT-EXPERIENCE.md](AUDIT-EXPERIENCE.md). Os registros abaixo pertencem às versões anteriores.
+A preview.4 acrescentou a regressão de captura, que detectou deslocamento residual e bloqueou a publicação; os 404 testes C# passaram. A preview.5 corrigiu esse deslocamento e passou nas 41 verificações WPF. Tornou opcionais somente as cópias extras de relatórios em artefatos do Actions, com retenção de sete dias e estados explícitos `test_archive` e `startup_archive`. Ambos funcionaram na execução final. Compilação, testes, verificação real, abertura, publicação e persistência das notas continuam obrigatórios; nenhum artefato histórico foi apagado.
+
+Os registros abaixo pertencem às versões anteriores.
 
 ## Auditoria e consultoria somente leitura — 18/10/2026
 

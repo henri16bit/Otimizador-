@@ -17,15 +17,15 @@ Windows 10 Pro 22H2 encerrou o suporte regular em **14 de outubro de 2025**. Ess
 
 ## Obter e executar a publicação
 
-Baixe **PCAnalyzer-windows-x64.zip** em [Releases no GitHub](https://github.com/henri16bit/Otimizador-/releases). Abra a versão desejada e procure o ZIP na seção **Assets**. Os links “Source code” contêm somente o código-fonte. As primeiras versões são prévias para validação local.
+Baixe [**PCAnalyzer-windows-x64.zip — v0.6.0-preview.5**](https://github.com/henri16bit/Otimizador-/releases/download/v0.6.0-preview.5/PCAnalyzer-windows-x64.zip). Essa prévia passou em 404 testes C# e 41 cenários WPF, além da abertura do executável no Windows; evidências e limites estão em [VALIDATION.md](docs/VALIDATION.md). Outras versões ficam em [Releases no GitHub](https://github.com/henri16bit/Otimizador-/releases), na seção **Assets**. Os links “Source code” contêm somente o código-fonte.
 
-Extraia o pacote Windows x64 completo para uma pasta gravável e execute:
+Extraia o ZIP completo para uma pasta nova e gravável. Abra essa pasta e execute **PCAnalyzer.exe**; pelo PowerShell nessa pasta:
 
 ```powershell
-.\artifacts\windows-x64\PCAnalyzer.exe
+.\PCAnalyzer.exe
 ```
 
-Se o ZIP tiver sido extraído diretamente na pasta de destino, execute `PCAnalyzer.exe` nessa pasta. Mantenha juntos o executável, suas dependências e a subpasta `worker`, que contém `PCAnalyzer.Worker.exe` e as dependências do auxiliar. Não copie apenas o `.exe` da interface. A entrega é uma publicação portátil; instalador e assinatura de código estão pendentes.
+Mantenha juntos o executável, suas dependências e a subpasta `worker`, que contém `PCAnalyzer.Worker.exe` e as dependências do auxiliar. Não copie apenas o `.exe` da interface. Ao gerar o pacote pelo código-fonte, o executável fica em `artifacts/windows-x64/PCAnalyzer.exe`. A entrega é uma publicação portátil; instalador e assinatura de código estão pendentes.
 
 A abertura inicia descoberta e **coleta passiva leve**, sem ping, benchmark, captura profunda ou alteração automática. A interface executa com privilégios normais. Operações que exigem administrador usam o auxiliar depois de uma ação explícita e do diálogo UAC do Windows. O PresentMon externo é uma ferramenta opcional e suas próprias permissões continuam se aplicando.
 
