@@ -1,0 +1,45 @@
+{
+  "tag": "v0.7.0-preview.1",
+  "timestamp": "2026-10-24T19:27:56.7380348+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/40125316552",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "network_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "ui_flows": "failure",
+    "hardware": "skipped",
+    "package": "skipped",
+    "smoke": "skipped",
+    "publish": "skipped",
+    "test_archive": "success",
+    "startup_archive": "success"
+  },
+  "uiFlows": {
+    "success": false,
+    "error": "System.InvalidOperationException: Home must render the valid measurement, capture context and interpretation together.\r\n   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 714\r\n   at PCAnalyzer.WpfHarness.Program.VerifyConsultationAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 528\r\n   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 247\r\n   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass4_0.<<Main>b__1>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 45"
+  },
+  "tests": {
+    "passed": 487,
+    "notExecuted": 0,
+    "failed": 0,
+    "total": 487
+  },
+  "failedTests": [],
+  "uiFlowstdout": [
+    "test.ping: fixture denied",
+    "fixture action: fixture failure",
+    "test.general: Fixture general failed before report",
+    "test.audit.configuration: fixture audit denied"
+  ],
+  "uiFlowstderr": [
+    "System.InvalidOperationException: Home must render the valid measurement, capture context and interpretation together.",
+    "   at PCAnalyzer.WpfHarness.Program.Require(Boolean value, String message) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 714",
+    "   at PCAnalyzer.WpfHarness.Program.VerifyConsultationAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 528",
+    "   at PCAnalyzer.WpfHarness.Program.RunAsync(MainWindow window, MainViewModel vm, ScenarioBackend backend) in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 247",
+    "   at PCAnalyzer.WpfHarness.Program.<>c__DisplayClass4_0.<<Main>b__1>d.MoveNext() in D:\\a\\Otimizador-\\Otimizador-\\tests\\PCAnalyzer.WpfHarness\\Program.cs:line 45"
+  ]
+}
