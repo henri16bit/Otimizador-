@@ -212,26 +212,30 @@ public sealed partial class ApplicationBackend : IApplicationBackend
             Cancelled: result.Cancelled,
             ComparisonKey: "frames:" + string.Join("|", result.Streams.Select(s => s.Identity.Application + ":" + s.DurationSource + ":" + s.Identity.FrameType).Distinct().Order()), Partial: !result.Complete);
     }
-    public async Task<TechnicalResult> CaptureDpcAsync(CancellationToken ct)
+    public Task<TechnicalResult> CaptureDpcAsync(CancellationToken ct) => CaptureDpcAsync(30, null, ct);
+    public async Task<TechnicalResult> CaptureDpcAsync(int durationSeconds, string? context, CancellationToken ct)
     {
-        var response = await RunPrivilegedAsync(new(PrivilegedAction.CaptureDpc, DateTimeOffset.UtcNow), ct);
+        if (durationSeconds is not (30 or 60 or 120)) throw new ArgumentOutOfRangeException(nameof(durationSeconds));
+        var response = await RunPrivilegedAsync(new(PrivilegedAction.CaptureDpc, DateTimeOffset.UtcNow, DurationSeconds: durationSeconds), ct);
         var result = JsonSerializer.Deserialize<EtwCaptureResult>(response.PayloadJson ?? "null")
             ?? throw new InvalidOperationException("O auxiliar não retornou um resultado ETW válido.");
         await SaveArtifactAsync("dpc-isr", result, CancellationToken.None);
-        return DescribeEtw(result);
+        return DescribeEtw(result, context, _lastConfigurationAudit, durationSeconds);
     }
     public async Task<TechnicalResult> ImportEtlAsync(string path, CancellationToken ct)
     {
         var result = await new EtwTraceService().ImportAsync(path, ct);
         await SaveArtifactAsync("dpc-isr", result, ct);
-        return DescribeEtw(result);
+        return DescribeEtw(result, "Captura ETL importada; contexto de carga não confirmado. Nenhuma configuração atual foi associada ao arquivo.", contextKnown: false);
     }
-    private static TechnicalResult DescribeEtw(EtwCaptureResult result)
+    private static TechnicalResult DescribeEtw(EtwCaptureResult result, string? context = null, PerformanceAuditReport? audit = null, int? requestedSeconds = null, bool contextKnown = true)
     {
+        var consultation = LatencyInterpretation.Consult(result, contextKnown ? context : null, audit);
         var lines = new List<string> { result.Status + ": " + result.Detail,
             $"Duração={result.Duration.TotalSeconds:F2} s; eventos vistos={result.EventsSeen}; perdidos={result.EventsLost}; cancelado={result.Cancelled}; limite={result.LimitReached}",
             "DPC/ISR mede execução no kernel; não mede input lag físico e picos isolados não comprovam defeito." };
         lines.AddRange(LatencyResultPresentation.Details(result));
+        lines.AddRange(consultation.Details);
         foreach (var group in result.CpuSummaries.Concat(result.ModuleSummaries))
             lines.Add($"CPU={group.Cpu}; {group.Kind}; módulo={group.Module ?? "não atribuído"}; n={group.Count}; média={group.MeanMicroseconds:F3} µs; máximo={group.MaximumMicroseconds:F3} µs; p95/p99={N(group.P95Microseconds)}/{N(group.P99Microseconds)} µs; n percentis={group.PercentileSampleCount}");
         if (result.Timeline is { } timeline)
@@ -250,8 +254,12 @@ public sealed partial class ApplicationBackend : IApplicationBackend
                 group.TakeLast(10_000).Select(e => new RelativePoint(e.TraceRelativeMilliseconds!.Value, e.DurationMicroseconds)).ToArray(),
                 result.TimelineTimeBasis, "Kernel ETW / TraceEvent; ordem temporal original, eventos individuais")).ToArray();
         return new("DPC/ISR — captura real", lines, metrics, series, LatencyResultPresentation.Indicators(result),
-            LatencyInterpretation.Analyze(result), result.Limitations, result.Status, result.Cancelled, ComparisonKey: "kernel-etw:dpc-isr",
-            Partial: result.EventsLost > 0 || result.LimitReached || result.TimelineTruncated || result.EventCounts?.RejectedLatencyEvents > 0);
+            consultation.Findings, result.Limitations, result.Status, result.Cancelled,
+            ComparisonKey: "kernel-etw:dpc-isr:" + (requestedSeconds is { } requested
+                ? "requested:" + requested.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : "imported:" + result.Duration.TotalSeconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)) + ":" + context,
+            Partial: consultation.Partial, SelectionContext: context,
+            Interpretation: consultation.Summary, NextStep: consultation.NextStep, InterpretationStatus: consultation.ClassificationLabel);
     }
 
     public async Task<TechnicalResult> RunLabAsync(string test, string? path, IProgress<double> progress, CancellationToken ct)

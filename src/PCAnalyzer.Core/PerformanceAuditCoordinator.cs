@@ -28,11 +28,39 @@ public sealed class PerformanceAuditCoordinator
 
     public async Task<PerformanceAuditReport> RunAsync(IProgress<TestProgress> progress, CancellationToken ct)
     {
-        progress.Report(new("Lendo configurações", Detail: "Registro, drivers e dispositivos; nenhuma configuração será alterada."));
-        var observations = await Task.WhenAll(_sources.Select(source => ReadAsync(source, ct))).ConfigureAwait(false);
+        progress.Report(new("Etapa A · Inventário de configurações", 0, 0,
+            $"{_sources.Length} fontes; as consultas terminam ao concluir ou atingir o limite de {_timeout.TotalSeconds:0} s por fonte."));
+        var completedSources = 0;
+        long completedChecks = 0;
+        var progressGate = new object();
+        var observations = await Task.WhenAll(_sources.Select(async source =>
+        {
+            var values = await ReadAsync(source, ct).ConfigureAwait(false);
+            // Publish the counters together: independently incremented counters could report
+            // the final fraction before a slower callback publishes an earlier value.
+            lock (progressGate)
+            {
+                completedChecks += values.Count;
+                completedSources++;
+                progress.Report(new("Etapa A · Fonte concluída: " + SourceName(source.Provider),
+                    (double)completedSources / _sources.Length, completedChecks,
+                    $"{completedSources}/{_sources.Length} fontes encerradas; {completedChecks} verificações com estado registrado. Leituras ausentes não contam como sucesso."));
+            }
+            return values;
+        })).ConfigureAwait(false);
         return PerformanceAuditEngine.Evaluate(_sources.SelectMany(s => s.Provider.Rules).ToArray(),
             observations.SelectMany(o => o).ToArray(), DateTimeOffset.UtcNow);
     }
+
+    private static string SourceName(IPerformanceAuditProvider provider) => provider.GetType().Name switch
+    {
+        "WindowsConfigurationAuditProvider" => "Windows e processos",
+        "NvidiaDriverAuditProvider" => "Perfis NVIDIA",
+        "DeviceInterruptAuditProvider" => "Dispositivos e interrupções",
+        "NetworkConfigurationAuditProvider" => "Rede",
+        "StorageMemoryAuditProvider" => "Memória e armazenamento",
+        _ => "Configurações"
+    };
 
     private async Task<IReadOnlyList<AuditObservation>> ReadAsync(Source source, CancellationToken ct)
     {

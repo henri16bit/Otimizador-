@@ -10,13 +10,17 @@ public sealed class PerformanceAuditEngine
     {
         var catalog = rules.GroupBy(x => x.Id, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.First(), StringComparer.Ordinal);
         var assessments = new List<AuditAssessment>();
+        var informationalDevices = observations.Where(o => o.RuleId == "devices.identity" &&
+                AuditRecommendationClassifier.Readable(o) && AuditRecommendationClassifier.IsInformationalDevice(o))
+            .Select(o => o.InstanceId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var observation in observations.DistinctBy(x => (x.RuleId, x.InstanceId)))
         {
             var rule = catalog.GetValueOrDefault(observation.RuleId) ?? new AuditRule(observation.RuleId,
                 "Outras áreas", observation.Name, observation.Source, "Regra catalogada", "Não verificada",
                 "Fonte técnica e critério de avaliação", "Não determinado", AuditSupport.NotVerifiable,
                 "Observação sem regra técnica registrada.", "Consultar fonte e metodologia antes de interpretar.", []);
-            assessments.Add(Interpret(rule, observation));
+            assessments.Add(ApplyRecommendationPolicy(Interpret(rule, observation),
+                observation.RuleId.StartsWith("devices.", StringComparison.Ordinal) && informationalDevices.Contains(observation.InstanceId)));
         }
         var available = assessments.Count(x => x.Observation.Status == Availability.Available);
         var attention = assessments.Count(x => x.Classification is AuditClassification.DemonstratedProblem or AuditClassification.PossibleProblem);
@@ -25,6 +29,38 @@ public sealed class PerformanceAuditEngine
             .Distinct(StringComparer.Ordinal).ToArray();
         return new(capturedAt, $"{available} de {assessments.Count} observações disponíveis; {attention} merecem investigação. Nenhuma configuração foi alterada.",
             assessments, limits);
+    }
+
+    private static AuditAssessment ApplyRecommendationPolicy(AuditAssessment assessment, bool informationalDevice)
+    {
+        var policy = informationalDevice && AuditRecommendationClassifier.Readable(assessment.Observation)
+            ? AuditRecommendationClassifier.InformationalDevice() : AuditRecommendationClassifier.Classify(assessment);
+        // Keep established, specific interpretations (including MMCSS rounding and High's override).
+        // Old provider comparison flags describe hypotheses, not evidence of an actionable opportunity.
+        var classification = policy.FunctionalKind switch
+        {
+            AuditFunctionalKind.Unsupported => AuditClassification.Unsupported,
+            AuditFunctionalKind.Incomplete => AuditClassification.InsufficientData,
+            AuditFunctionalKind.NoDocumentedEffect => AuditClassification.NoDocumentedEffect,
+            _ when policy.IsImprovement && assessment.Classification is not
+                (AuditClassification.DemonstratedProblem or AuditClassification.PossibleProblem) =>
+                policy.Kind == AuditRecommendationKind.Compare ? AuditClassification.ComparisonOpportunity : AuditClassification.PossibleProblem,
+            _ when !policy.IsImprovement && assessment.Classification is
+                AuditClassification.ComparisonOpportunity or AuditClassification.PossibleProblem =>
+                policy.IsAdequate ? AuditClassification.Adequate : AuditClassification.AppliedUnproven,
+            _ => assessment.Classification
+        };
+        if (classification == assessment.Classification) return assessment;
+        return assessment with
+        {
+            Classification = classification,
+            Summary = policy.ShortReason,
+            Reason = policy.Reason,
+            PossibleBenefit = policy.PossibleImpact,
+            Confidence = policy.InterpretationConfidence ?? Confidence.Low,
+            Risks = policy.Risks,
+            Validation = policy.Validation
+        };
     }
 
     private static AuditAssessment Interpret(AuditRule rule, AuditObservation observation)

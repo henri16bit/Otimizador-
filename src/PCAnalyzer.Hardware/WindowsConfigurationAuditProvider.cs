@@ -230,13 +230,20 @@ public sealed class WindowsConfigurationAuditProvider : IPerformanceAuditProvide
             foreach (var process in processes.OrderBy(p => p.Id == Environment.ProcessId ? 0 : 1).ThenBy(p => p.Id).Take(1024))
             {
                 ct.ThrowIfCancellationRequested();
-                var facts = new Dictionary<string, string> { ["PID"] = process.Id.ToString(CultureInfo.InvariantCulture),
-                    ["foreground"] = (process.Id == foregroundPid).ToString(), ["configured"] = "false", ["presence"] = "present" };
                 var missing = new List<string>();
-                var name = "PID " + process.Id;
-                try { name = process.ProcessName; facts["ExecutableName"] = name + ".exe"; } catch (Exception error) when (ReadFailure(error)) { missing.Add("Nome indisponível."); }
-                try { facts["ProcessStartedAtUtc"] = process.StartTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture); }
+                string? processName = null, executablePath = null;
+                DateTimeOffset? startedAt = null;
+                try { processName = process.ProcessName; } catch (Exception error) when (ReadFailure(error)) { missing.Add("Nome indisponível."); }
+                try
+                {
+                    executablePath = process.MainModule?.FileName;
+                    if (string.IsNullOrWhiteSpace(executablePath)) missing.Add("Caminho executável não retornado pela API.");
+                }
+                catch (Exception error) when (ReadFailure(error)) { missing.Add("Caminho executável indisponível; o nome vem do snapshot do processo."); }
+                try { startedAt = process.StartTime.ToUniversalTime(); }
                 catch (Exception error) when (ReadFailure(error)) { missing.Add("Horário de criação indisponível; este PID não será comparado entre snapshots."); }
+                var facts = ProcessIdentityFacts(process.Id, Environment.ProcessId, foregroundPid, processName, executablePath, startedAt);
+                var name = string.IsNullOrWhiteSpace(processName) ? "PID " + process.Id : processName;
                 try { facts["PriorityClass"] = process.PriorityClass.ToString(); } catch (Exception error) when (ReadFailure(error)) { missing.Add("Classe de prioridade indisponível: " + error.GetType().Name); }
                 try { facts["AffinityMask"] = "0x" + unchecked((ulong)process.ProcessorAffinity.ToInt64()).ToString("X", CultureInfo.InvariantCulture); }
                 catch (Exception error) when (ReadFailure(error)) { missing.Add("Afinidade indisponível: " + error.GetType().Name); }
@@ -251,6 +258,30 @@ public sealed class WindowsConfigurationAuditProvider : IPerformanceAuditProvide
             if (processes.Length > 1024) output.Add(Missing("windows.process.scheduling", "process:limit", "Processos", Availability.InsufficientData, "Snapshot limitado aos primeiros 1024 PIDs."));
         }
         finally { foreach (var process in processes) process.Dispose(); }
+    }
+
+    internal static Dictionary<string, string> ProcessIdentityFacts(int processId, int analyzerProcessId, uint foregroundProcessId,
+        string? processName, string? executablePath, DateTimeOffset? startedAt)
+    {
+        var facts = new Dictionary<string, string>
+        {
+            ["PID"] = processId.ToString(CultureInfo.InvariantCulture), ["foreground"] = (processId == foregroundProcessId).ToString(),
+            ["configured"] = "false", ["presence"] = "present", ["IsAnalyzerProcess"] = (processId == analyzerProcessId).ToString(),
+            ["SelectionContext"] = "Snapshot de processos; primeiro plano não significa processo selecionado nem jogo."
+        };
+        if (!string.IsNullOrWhiteSpace(executablePath))
+        {
+            facts["ExecutablePath"] = executablePath;
+            facts["ExecutableName"] = executablePath.Replace('\\', '/').Split('/')[^1];
+            facts["ExecutableIdentitySource"] = "Process.MainModule.FileName";
+        }
+        else if (!string.IsNullOrWhiteSpace(processName))
+        {
+            facts["ExecutableName"] = processName + ".exe";
+            facts["ExecutableIdentitySource"] = "Process.ProcessName; nome do snapshot, caminho não confirmado";
+        }
+        if (startedAt is { } created) facts["ProcessStartedAtUtc"] = created.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+        return facts;
     }
 
     [SupportedOSPlatform("windows")]

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -11,8 +12,10 @@ namespace PCAnalyzer.App.Controls;
 /// <summary>Displays the presentation policy's values and evidence without interpreting or editing settings.</summary>
 public partial class AuditSettingDialog : Window
 {
+    private const int EvidencePageSize = 20;
     private readonly Action<string>? _requestTest;
     private bool _fittingWorkArea;
+    private int _evidencePage;
 
     public AuditSettingPresentation Setting { get; }
 
@@ -25,7 +28,10 @@ public partial class AuditSettingDialog : Window
         DataContext = setting;
         RequestTestButton.Visibility = string.IsNullOrWhiteSpace(setting.TestId) ? Visibility.Collapsed : Visibility.Visible;
         RequestTestButton.IsEnabled = requestTest is not null;
-        TechnicalDetailsExpander.Visibility = setting.TechnicalDetails.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        TechnicalRisksPanel.Visibility = string.IsNullOrWhiteSpace(setting.Risks) ? Visibility.Collapsed : Visibility.Visible;
+        TechnicalDetailsExpander.Visibility = setting.TechnicalDetails.Count == 0 && string.IsNullOrWhiteSpace(setting.Risks)
+            ? Visibility.Collapsed : Visibility.Visible;
+        UpdateEvidencePage();
         Loaded += (_, _) =>
         {
             FitWorkArea();
@@ -36,6 +42,60 @@ public partial class AuditSettingDialog : Window
     }
 
     private void OnCloseDetails(object sender, RoutedEventArgs e) => Close();
+
+    private void UpdateEvidencePage()
+    {
+        var start = _evidencePage * EvidencePageSize;
+        TechnicalEvidenceItems.ItemsSource = Setting.TechnicalDetails.Skip(start).Take(EvidencePageSize).ToArray();
+        var end = Math.Min(start + EvidencePageSize, Setting.TechnicalDetails.Count);
+        TechnicalEvidencePageText.Text = Setting.TechnicalDetails.Count == 0 ? "Sem evidências adicionais." :
+            $"Evidências {start + 1}–{end} de {Setting.TechnicalDetails.Count}";
+        System.Windows.Automation.AutomationProperties.SetName(TechnicalEvidenceItems, TechnicalEvidencePageText.Text);
+        TechnicalEvidencePager.Visibility = Setting.TechnicalDetails.Count > EvidencePageSize ? Visibility.Visible : Visibility.Collapsed;
+        PreviousEvidenceButton.IsEnabled = _evidencePage > 0;
+        NextEvidenceButton.IsEnabled = end < Setting.TechnicalDetails.Count;
+    }
+
+    private void OnPreviousEvidence(object sender, RoutedEventArgs e)
+    {
+        if (_evidencePage == 0) return;
+        _evidencePage--;
+        UpdateEvidencePage();
+        FocusEvidencePage();
+    }
+
+    private void OnNextEvidence(object sender, RoutedEventArgs e)
+    {
+        if ((_evidencePage + 1) * EvidencePageSize >= Setting.TechnicalDetails.Count) return;
+        _evidencePage++;
+        UpdateEvidencePage();
+        FocusEvidencePage();
+    }
+
+    private void FocusEvidencePage()
+    {
+        // Wait for the new item containers. Focus follows the newly displayed evidence,
+        // including on the last page where the previously focused Next button is disabled.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (!IsVisible || !TechnicalDetailsExpander.IsExpanded) return;
+            TechnicalEvidenceItems.UpdateLayout();
+            if (FirstTextBox(TechnicalEvidenceItems) is not { } first) return;
+            first.Focus();
+            first.BringIntoView(new Rect(0, 0, Math.Max(1, first.ActualWidth), Math.Min(24, Math.Max(1, first.ActualHeight))));
+        }));
+    }
+
+    private static TextBox? FirstTextBox(DependencyObject parent)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is TextBox text) return text;
+            if (FirstTextBox(child) is { } nested) return nested;
+        }
+        return null;
+    }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {

@@ -51,10 +51,10 @@ public static class LatencyResultPresentation
 
     private static LatencyKindResult SummarizeKind(EtwCaptureResult capture, string kind)
     {
-        var aggregates = capture.CpuSummaries.Where(s => Matches(s.Kind, kind) && s.Cpu is >= 0 and <= 65_535 && s.Count > 0 &&
-            double.IsFinite(s.TotalMicroseconds) && s.TotalMicroseconds >= 0 &&
-            double.IsFinite(s.MaximumMicroseconds) && s.MaximumMicroseconds >= 0).ToArray();
-        long? count = aggregates.Length > 0 ? aggregates.Sum(s => s.Count) : null;
+        var aggregates = capture.CpuSummaries.Where(s => Matches(s.Kind, kind) && IsValidAggregate(s)).ToArray();
+        // Imported/history data can contain malformed counters; do not overflow or invent a count.
+        var totalCount = aggregates.Sum(s => (decimal)s.Count);
+        long? count = aggregates.Length > 0 && totalCount <= long.MaxValue ? (long)totalCount : null;
         double? mean = count is > 0 ? aggregates.Sum(s => s.TotalMicroseconds / count.Value) : null;
         if (mean is { } value && !double.IsFinite(value)) mean = null;
         double? maximum = aggregates.Length > 0 ? aggregates.Max(s => s.MaximumMicroseconds) : null;
@@ -62,7 +62,7 @@ public static class LatencyResultPresentation
             double.IsFinite(e.DurationMicroseconds) && e.DurationMicroseconds >= 0).ToArray();
         var durations = timeline.Select(e => e.DurationMicroseconds).ToArray();
         var timed = timeline.Where(e => e.TraceRelativeMilliseconds is { } t && double.IsFinite(t) && t >= 0 &&
-            t < TimeSpan.MaxValue.TotalMilliseconds).ToArray();
+            t < TimeSpan.MaxValue.TotalMilliseconds && t <= capture.Duration.TotalMilliseconds).ToArray();
         var recurring = timed.Where(e => e.DurationMicroseconds >= 1000).ToArray();
         return new(kind, count, maximum, mean,
             durations.Length >= 20 ? Statistics.Percentile(durations, .95) : null,
@@ -72,6 +72,11 @@ public static class LatencyResultPresentation
     }
 
     private static bool Matches(string actual, string expected) => expected == "ISR" ? actual == "ISR" : actual is "DPC" or "TimerDPC" or "ThreadedDPC";
+    internal static bool IsValidAggregate(LatencySummary s) => (s.Kind is "DPC" or "TimerDPC" or "ThreadedDPC" or "ISR") &&
+        s.Cpu is >= 0 and <= 65_535 && s.Count > 0 && double.IsFinite(s.TotalMicroseconds) && s.TotalMicroseconds >= 0 &&
+        double.IsFinite(s.MaximumMicroseconds) && s.MaximumMicroseconds >= 0 &&
+        s.MaximumMicroseconds <= s.TotalMicroseconds + Math.Abs(s.TotalMicroseconds) * 1e-12 &&
+        s.TotalMicroseconds / s.Count <= s.MaximumMicroseconds + Math.Abs(s.MaximumMicroseconds) * 1e-12;
     private static string KindScope(string kind) => kind == "DPC" ? "DPC (inclui timer/threaded)" : "ISR";
     private static string Count(long? count) => count?.ToString() ?? "indisponível";
     private static string Number(double? value) => value?.ToString("0.###") ?? "indisponível";

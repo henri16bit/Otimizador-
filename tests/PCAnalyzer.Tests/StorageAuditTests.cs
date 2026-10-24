@@ -6,6 +6,37 @@ namespace PCAnalyzer.Tests;
 public sealed class StorageAuditTests
 {
     [Fact]
+    public void MemoryPlatformContextRetainsOnlyTheReadCpuAndMotherboardIdentity()
+    {
+        var platform = StorageMemoryAuditProvider.MemoryPlatformFacts([Row(("Name", " Intel Core i5-10400F "))], Availability.Available,
+            [Row(("Product", "PRIME H410M-E"))], Availability.Available);
+        var module = Assert.Single(StorageMemoryAuditProvider.ReadMemory(
+            [Row(("Capacity", 8_589_934_592L), ("ConfiguredClockSpeed", 2933), ("SMBIOSMemoryType", 26))], Availability.Available, platform));
+        Assert.Equal("Intel Core i5-10400F", module.Facts["CpuName"]);
+        Assert.Equal("PRIME H410M-E", module.Facts["BaseboardProduct"]);
+        Assert.Equal("2933", module.Facts["ConfiguredTransferRateMTs"]);
+        Assert.DoesNotContain("Chipset", module.Facts.Keys);
+        Assert.Contains("não leitura direta", module.Facts["PlatformContextSource"]);
+    }
+
+    [Theory]
+    [InlineData("empty")]
+    [InlineData("ambiguous")]
+    [InlineData("denied")]
+    public void MissingOrAmbiguousPlatformNeverBecomesTheReferencePc(string scenario)
+    {
+        var processors = scenario == "empty" ? new[] { Row(("Name", " ")) } :
+            scenario == "ambiguous" ? [Row(("Name", "CPU A")), Row(("Name", "CPU B"))] : [Row(("Name", "Intel Core i5-10400F"))];
+        var boards = scenario == "empty" ? new[] { Row(("Product", (object?)null)) } :
+            scenario == "ambiguous" ? [Row(("Product", "Board A")), Row(("Product", "Board B"))] : [Row(("Product", "H410"))];
+        var status = scenario == "denied" ? Availability.PermissionRequired : Availability.Available;
+        var facts = StorageMemoryAuditProvider.MemoryPlatformFacts(processors, status, boards, status);
+        Assert.DoesNotContain("CpuName", facts.Keys);
+        Assert.DoesNotContain("BaseboardProduct", facts.Keys);
+        Assert.Equal(status.ToString(), facts["CpuContextStatus"]);
+    }
+
+    [Fact]
     public void DdrConfiguredRateIsReportedWithoutFabricatingSpdXmpOrDualChannel()
     {
         var rows = new[] { Row(("DeviceLocator", "DIMM_A2"), ("PartNumber", "DDR4 module"), ("Capacity", 8_589_934_592L),

@@ -15,10 +15,13 @@ namespace PCAnalyzer.Verify;
 internal sealed record AuditVerificationCheck(string Description, bool Passed);
 internal sealed record AuditProviderCoverage(string Provider, bool Required, int Observations, int Available,
     IReadOnlyDictionary<string, int> StatusCounts);
+internal sealed record AuditInterpretationExample(string RuleId, string Current, string Recommended,
+    string ShortReason, string FunctionalKind);
 internal sealed record AuditVerificationResult(bool Passed, int SavedAssessmentCount,
     bool ExactSqliteRoundTrip, bool AnonymousJsonMatchesSavedSession, bool AnonymousHtmlMatchesSavedSession,
     bool AssessmentMetadataPreserved, bool NvidiaSettingsRead,
-    IReadOnlyList<AuditProviderCoverage> Providers, IReadOnlyList<AuditVerificationCheck> Checks, string Scope);
+    IReadOnlyList<AuditProviderCoverage> Providers, IReadOnlyList<AuditVerificationCheck> Checks,
+    IReadOnlyList<AuditInterpretationExample> Examples, string Scope);
 
 /// <summary>Acceptance of actual read-only providers; fixtures cannot satisfy these checks.</summary>
 internal static class AuditVerification
@@ -36,7 +39,26 @@ internal static class AuditVerification
             Console.WriteLine("Auditoria passiva: " + progress.Stage)), ct);
         ct.ThrowIfCancellationRequested();
         var observations = audit.Assessments.Select(assessment => assessment.Observation).ToArray();
+        var presentation = AuditPresentationBuilder.Build(audit);
         var checks = new List<AuditVerificationCheck>();
+        var policies = audit.Assessments.Select(assessment =>
+            (Assessment: assessment, Recommendation: AuditRecommendationClassifier.Classify(assessment))).ToArray();
+        var informational = policies.Where(item => item.Recommendation.FunctionalKind is
+            AuditFunctionalKind.Informational or AuditFunctionalKind.NoDocumentedEffect).ToArray();
+        if (informational.Length > 0)
+            checks.Add(new($"Interpretação: {informational.Length} leituras informativas ou sem efeito documentado não viram otimizações",
+                informational.All(item => !item.Recommendation.IsImprovement &&
+                    item.Recommendation.Kind is not (AuditRecommendationKind.Compare or AuditRecommendationKind.SpecificValue))));
+        var incomplete = policies.Where(item => !AuditRecommendationClassifier.Readable(item.Assessment.Observation)).ToArray();
+        if (incomplete.Length > 0)
+            checks.Add(new($"Interpretação: {incomplete.Length} leituras ausentes ou indisponíveis não recomendam alteração nem alegam benefício",
+                incomplete.All(item => !item.Recommendation.IsImprovement && !item.Recommendation.IsAdequate &&
+                    item.Recommendation.Kind == AuditRecommendationKind.Unavailable &&
+                    item.Recommendation.BenefitConfidence is null && item.Recommendation.TestId is null)));
+        checks.Add(new("Apresentação: itens informativos, sem efeito documentado ou indisponíveis ficam fora das melhorias",
+            presentation.Where(row => row.FunctionalKind is AuditFunctionalKind.Informational or
+                AuditFunctionalKind.NoDocumentedEffect or AuditFunctionalKind.Unsupported or AuditFunctionalKind.Incomplete)
+                .All(row => !row.IsImprovement && !row.IsComparison)));
         var coverage = providers.Select(provider =>
         {
             var rules = provider.Rules.Select(rule => rule.Id).ToHashSet(StringComparer.Ordinal);
@@ -64,6 +86,28 @@ internal static class AuditVerification
             }
         }
 
+        using (var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+        using (var scheduling = root.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\PriorityControl", writable: false))
+        {
+            // Verify whatever DWORD is really stored; neither 0x26 nor 0x2A is an acceptance target.
+            if (scheduling?.GetValue("Win32PrioritySeparation", null, RegistryValueOptions.DoNotExpandEnvironmentNames) is int signed &&
+                scheduling.GetValueKind("Win32PrioritySeparation") == RegistryValueKind.DWord)
+            {
+                var expected = unchecked((uint)signed);
+                var rows = presentation.Where(row => row.Evidence.Any(assessment =>
+                    assessment.Observation.RuleId == "windows.scheduler.separation")).ToArray();
+                var expectedDisplay = "0x" + expected.ToString("X", CultureInfo.InvariantCulture) +
+                    " (" + expected.ToString(CultureInfo.InvariantCulture) + ")";
+                checks.Add(new("Agendamento: valor apresentado em hexadecimal/decimal coincide com DWORD real lido independentemente",
+                    rows.Length == 1 && rows[0].CurrentValue == expectedDisplay && rows[0].Evidence.All(assessment =>
+                        assessment.Observation.Status == Availability.Available &&
+                        assessment.Observation.Facts.GetValueOrDefault("decimal") == expected.ToString(CultureInfo.InvariantCulture))));
+                checks.Add(new("Agendamento: DWORD observado não recebe substituto universal nem ganho presumido",
+                    rows.Length == 1 && !rows[0].IsImprovement && rows[0].RecommendationKind != AuditRecommendationKind.SpecificValue &&
+                    rows[0].Evidence.All(assessment => AuditRecommendationClassifier.Classify(assessment).BenefitConfidence is null)));
+            }
+        }
+
         using (var ownProcess = Process.GetCurrentProcess())
         {
             var rows = observations.Where(observation => observation.RuleId == "windows.process.scheduling" &&
@@ -74,6 +118,36 @@ internal static class AuditVerification
             var expectedAffinity = "0x" + unchecked((ulong)ownProcess.ProcessorAffinity.ToInt64()).ToString("X", CultureInfo.InvariantCulture);
             checks.Add(new("Processo próprio: máscara de afinidade disponível e igual à leitura direta",
                 own?.Status == Availability.Available && own.Facts.GetValueOrDefault("AffinityMask") == expectedAffinity));
+            var ownRows = presentation.Where(row => row.Evidence.Any(assessment =>
+                assessment.Observation.RuleId == "windows.process.scheduling" &&
+                assessment.Observation.Facts.GetValueOrDefault("PID") == Environment.ProcessId.ToString(CultureInfo.InvariantCulture))).ToArray();
+            var expectedPriority = ownProcess.PriorityClass switch
+            {
+                ProcessPriorityClass.Normal => "normal", ProcessPriorityClass.RealTime => "tempo real",
+                ProcessPriorityClass.High => "alta", ProcessPriorityClass.AboveNormal => "acima do normal",
+                ProcessPriorityClass.BelowNormal => "abaixo do normal", ProcessPriorityClass.Idle => "ociosa", _ => "não identificada"
+            };
+            checks.Add(new("Processo próprio: linha individual apresenta prioridade e afinidade reais, sem agregar outros executáveis",
+                ownRows.Length == 1 && ownRows[0].Evidence.Count == 1 &&
+                ownRows[0].CurrentValue == "Prioridade " + expectedPriority + " · máscara " + expectedAffinity &&
+                ownRows[0].Evidence[0].Observation.InstanceId == own?.InstanceId));
+        }
+
+        // Only fixed, non-identifying fields are included: no paths, raw facts, third-party process names or PIDs.
+        var examples = new List<AuditInterpretationExample>();
+        AddExample("windows.version", observation => observation.Name == "ProductName");
+        AddExample("windows.version", observation => observation.Name == "CurrentBuildNumber");
+        AddExample("windows.scheduler.separation");
+        AddExample("windows.process.scheduling", observation =>
+            observation.Facts.GetValueOrDefault("PID") == Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+        AddExample("memory.modules");
+        void AddExample(string ruleId, Func<AuditObservation, bool>? condition = null)
+        {
+            var row = presentation.FirstOrDefault(candidate => candidate.Evidence.Any(assessment =>
+                assessment.Observation.RuleId == ruleId && AuditRecommendationClassifier.Readable(assessment.Observation) &&
+                (condition is null || condition(assessment.Observation))));
+            if (row is not null)
+                examples.Add(new(ruleId, row.CurrentValue, row.RecommendedValue, row.ShortReason, row.FunctionalKind.ToString()));
         }
 
         var topologyRows = observations.Where(observation => observation.RuleId == "hardware.cpu.topology").ToArray();
@@ -122,7 +196,8 @@ internal static class AuditVerification
         foreach (var check in checks.Where(check => !check.Passed)) Console.Error.WriteLine("Auditoria não validada: " + check.Description);
         return new(checks.All(check => check.Passed), audit.Assessments.Count, true, true, true, true,
             observations.Any(observation => observation.RuleId.StartsWith("nvidia.drs.", StringComparison.Ordinal) && observation.Status == Availability.Available),
-            coverage, checks, "Leituras reais no Windows, confronto de Registro/processo/topologia com APIs independentes, SQLite exato e exportação anônima. " +
+            coverage, checks, examples, "Leituras reais no Windows, confronto de Registro/processo/topologia com APIs independentes, " +
+                "classificação e apresentação de valores observados, SQLite exato e exportação anônima. " +
                 "Não valida ganho, aplicação efetiva de tweaks, precisão de sensores, GPU ausente, interrupções em carga ou o PC do usuário.");
     }
 

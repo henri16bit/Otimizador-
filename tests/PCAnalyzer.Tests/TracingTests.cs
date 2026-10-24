@@ -143,7 +143,8 @@ public sealed class TracingTests
         Assert.Null(result.EventCounts);
         Assert.Equal(9, result.EventsSeen);
         Assert.Contains("contagens separadas indisponíveis", LatencyInterpretation.DescribeCoverage(result));
-        Assert.Equal(FindingCategory.InsufficientData, Assert.Single(LatencyInterpretation.Analyze(result)).Category);
+        Assert.All(LatencyInterpretation.Analyze(result), finding => Assert.Equal(FindingCategory.InsufficientData, finding.Category));
+        Assert.Equal(LatencyConsultationClassification.InvalidOrInsufficient, LatencyInterpretation.Consult(result).Classification);
     }
 
     [Fact]
@@ -156,7 +157,7 @@ public sealed class TracingTests
         var finding = Assert.Single(LatencyInterpretation.Analyze(result));
         Assert.Equal(FindingCategory.InsufficientData, finding.Category);
         Assert.Equal(Confidence.Low, finding.Confidence);
-        Assert.Equal("dpc-coverage", finding.Id);
+        Assert.Equal("dpc-interpretation", finding.Id);
     }
 
     [Fact]

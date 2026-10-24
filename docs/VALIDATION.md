@@ -1,5 +1,13 @@
 # Validação executada
 
+## Motor de recomendações e interpretação — 24/10/2026
+
+Validação local da evolução para `v0.7.0-preview.1`: compilação Release com `-warnaserror`, **zero avisos/erros**; **487/487 testes C# aprovados**, sem ignorados (`artifacts/test-results/recommendation-engine.trx`); **16 cenários PowerShell de rede**, **cinco verificações de pacote** e **cinco de publicação** aprovados. As duas últimas suítes usam recursos isolados e não publicam nem alteram adaptadores.
+
+O harness compila com **53 cenários WPF**, incluindo motivos, modal paginado, duração/confirmação DPC, contexto desconhecido em ETL, última leitura por indicador e sessão original dos destaques. A execução WPF e a validação nativa Windows desta versão ainda estão pendentes. O pacote disponível abaixo pertence à versão anterior até a conclusão do novo pipeline.
+
+Regras e rastreabilidade dos 20 requisitos: [RECOMMENDATION-ENGINE.md](RECOMMENDATION-ENGINE.md). Não foram validados o PC alvo, DPI físico, DRS NVIDIA real, I219-V, ETW/PresentMon em jogo ou benefício de desempenho.
+
 ## Experiência de auditoria por categoria — v0.6.0-preview.5
 
 **Publicação concluída:** [execução Windows aprovada](https://github.com/henri16bit/Otimizador-/actions/runs/39462416180), código `da11ebbc988b919cb3a9d0effdfb6a13b99b461e`, [ZIP com executável](https://github.com/henri16bit/Otimizador-/releases/download/v0.6.0-preview.5/PCAnalyzer-windows-x64.zip) e [SHA256](https://github.com/henri16bit/Otimizador-/releases/download/v0.6.0-preview.5/PCAnalyzer-windows-x64.zip.sha256). O workflow terminou com **Success**; todos os estados registrados, inclusive os dois arquivamentos de relatórios, foram aprovados. A publicação ocorreu em 20/10/2026.

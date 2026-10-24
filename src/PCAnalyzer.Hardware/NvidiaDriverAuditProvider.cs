@@ -168,13 +168,17 @@ public sealed class NvidiaDriverAuditProvider : IPerformanceAuditProvider
                     ["location"] = setting.Location.ToString(CultureInfo.InvariantCulture),
                     ["currentPredefined"] = setting.CurrentPredefined ? "true" : "false",
                     ["explicitInProfile"] = setting.Location == 0 && !setting.CurrentPredefined ? "true" : "false",
+                    ["profileScope"] = association is not null ? "application" : key,
+                    ["GraphicsApi"] = "Não identificada", ["GraphicsApiStatus"] = Availability.InsufficientData.ToString(),
+                    ["GraphicsApiSource"] = "NVAPI DRS não identifica a API usada pelo processo nesta consulta.",
                     ["recognition"] = "GetSetting retornou este ID e valor com sucesso; aplicabilidade na renderização não medida."
                 };
                 if (setting.PredefinedValid) facts["predefinedValue"] = $"{definition.Format(setting.PredefinedValue)} (0x{setting.PredefinedValue:X8})";
                 if (association is not null)
                 {
-                    facts["runningProcessIds"] = association["runningProcessIds"];
-                    facts["lookup"] = association["lookup"];
+                    foreach (var field in new[] { "runningProcessIds", "lookup", "executable", "executableName", "observedProcess",
+                        "applicationName", "predefinedAssociation", "fileInFolder", "applicationFlags", "commandLine", "structureVersion" })
+                        if (association.TryGetValue(field, out var context)) facts[field] = context;
                     if (global?.TryGetValue(definition.Id, out var globalSetting) == true)
                     {
                         facts["globalValue"] = $"{definition.Format(globalSetting.CurrentValue)} (0x{globalSetting.CurrentValue:X8})";
@@ -199,6 +203,8 @@ public sealed class NvidiaDriverAuditProvider : IPerformanceAuditProvider
     {
         ["lookup"] = target.FullPath ? "Caminho completo observado" : "Somente nome do executável",
         ["executable"] = target.Executable,
+        ["executableName"] = FileName(target.Executable),
+        ["GraphicsApi"] = "Não identificada", ["GraphicsApiStatus"] = Availability.InsufficientData.ToString(),
         ["runningProcessIds"] = string.Join(", ", target.ProcessIds),
         ["observedProcess"] = target.ProcessIds.Count > 0 ? "true" : "false"
     };
@@ -251,8 +257,9 @@ public sealed class NvidiaDriverAuditProvider : IPerformanceAuditProvider
                 string? path = null;
                 try { path = process.MainModule?.FileName; }
                 catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException) { }
-                if (string.IsNullOrWhiteSpace(path)) inaccessible++;
-                values.Add((path ?? (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name : name + ".exe"), process.Id, !string.IsNullOrWhiteSpace(path)));
+                var hasPath = !string.IsNullOrWhiteSpace(path);
+                if (!hasPath) inaccessible++;
+                values.Add((hasPath ? path! : (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name : name + ".exe"), process.Id, hasPath));
             }
         }
         var grouped = values.GroupBy(x => x.Executable, StringComparer.OrdinalIgnoreCase)

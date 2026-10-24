@@ -249,7 +249,8 @@ public sealed partial class MainViewModel
         ExecutionLog.Clear();
         var run = await _execution.ExecuteAsync(definition, async (progress, ct) =>
         {
-            var result = (await execute(progress, ct)) with { SelectionContext = selectionContext };
+            var result = await execute(progress, ct);
+            result = result with { SelectionContext = result.SelectionContext ?? selectionContext };
             progress.Report(new("Organizando evidências e resultado"));
             // Coordinated analyses already own their inventory, observation window, processes,
             // findings and change context. Do not rebuild that session from the passive buffer.
@@ -358,6 +359,7 @@ public sealed partial class MainViewModel
             UpdateLastDiagnostic(analysis);
             break;
         }
+        await RestoreMeasurementHistoryAsync(history);
         Notify(nameof(RecentTests));
     }
     private async Task CompareTestsAsync()

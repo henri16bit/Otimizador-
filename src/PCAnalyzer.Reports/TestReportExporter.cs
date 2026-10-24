@@ -21,6 +21,10 @@ public static class TestReportExporter
         static string H(string? text) => WebUtility.HtmlEncode(text ?? "");
         var html = new StringBuilder("<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>PC Analyzer — resultado</title><style>body{font:16px system-ui;background:#101827;color:#e2e8f0;max-width:1080px;margin:32px auto;padding:20px}article,details{background:#192337;padding:18px;margin:12px 0;border-radius:8px}td,th{padding:10px;text-align:left;border-bottom:1px solid #334155}pre{white-space:pre-wrap;overflow-wrap:anywhere}h2{color:#93c5fd}</style><h1>");
         html.Append(H(safe.Name)).Append("</h1><p>").Append(H(safe.Status.ToString())).Append(" · ").Append(H(safe.StartedAt.ToString("O"))).Append("</p><p>").Append(H(safe.Error)).Append("</p>");
+        if (safe.Result?.Interpretation is { Length: > 0 } interpretation)
+            html.Append("<article><h2>").Append(H(safe.Result.InterpretationStatus ?? "Interpretação da medição"))
+                .Append("</h2><p>").Append(H(interpretation)).Append("</p><p>Próximo passo: ")
+                .Append(H(safe.Result.NextStep)).Append("</p></article>");
         if (safe.Result?.Audit is { } audit) html.Append(PerformanceAuditHtml.Render(audit, safe.Result.Report));
         if (safe.Result?.Report is { } report)
         {
@@ -86,6 +90,9 @@ public static class TestReportExporter
                 Title = clean(result.Title), Lines = result.Lines.Select(clean).ToArray(), Metrics = metrics.Samples, Findings = metrics.Findings,
                 ComparisonKey = result.ComparisonKey is null ? null : clean(result.ComparisonKey),
                 SelectionContext = result.SelectionContext is null ? null : "Contexto de seleção omitido na cópia anônima.",
+                Interpretation = result.Interpretation is null ? null : clean(result.Interpretation),
+                NextStep = result.NextStep is null ? null : clean(result.NextStep),
+                InterpretationStatus = result.InterpretationStatus is null ? null : clean(result.InterpretationStatus),
                 Report = result.Report is null ? null : ReportPrivacy.RedactReport(result.Report, clean),
                 Audit = result.Audit is null ? null : ReportPrivacy.RedactAudit(result.Audit, clean),
                 Session = result.Session is null ? null : safe,

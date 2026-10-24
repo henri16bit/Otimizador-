@@ -174,6 +174,7 @@
                     <StackPanel>
                         <TextBlock Text="{Binding HomeAuditState}" Style="{StaticResource SectionTitle}"/>
                         <TextBlock Text="{Binding HomeAuditSummary}" Style="{StaticResource Note}"/>
+                        <TextBlock Text="{Binding HomeCoverage}" Style="{StaticResource Note}" FontSize="13"/>
                         <TextBlock Text="Melhorias possíveis" FontSize="20" FontWeight="SemiBold" Margin="0,12,0,8"/>
                         <TextBlock Text="{Binding PriorityAuditSummary}" Style="{StaticResource Note}" Margin="0,0,0,8"/>
                         <Border BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,0,1" Padding="10,0,10,8" Visibility="{Binding HasPriorityAuditSettings, Converter={StaticResource BooleanVisibility}}">
@@ -182,7 +183,11 @@
                             </Grid>
                         </Border>
                         <ItemsControl ItemsSource="{Binding PriorityAuditSettings}" ItemTemplate="{StaticResource PrioritySettingTemplate}"/>
+                        <ItemsControl ItemsSource="{Binding HomeMeasurementConclusions}" ItemTemplate="{StaticResource RecommendationTemplate}"/>
                         <Button Content="Ver recomendações" Command="{Binding NavigateCommand}" CommandParameter="ajustes" Style="{StaticResource QuietButton}" HorizontalAlignment="Left" Margin="0,12,0,8"/>
+                        <Expander Header="Configurações adequadas para manter" IsExpanded="False">
+                            <StackPanel Margin="0,10,0,0"><TextBlock Text="{Binding HomeAdequateSummary}" Style="{StaticResource Note}"/><ItemsControl ItemsSource="{Binding HomeAdequateSettings}" ItemTemplate="{StaticResource PrioritySettingTemplate}"/></StackPanel>
+                        </Expander>
                         <StackPanel Margin="0,12,0,8">
                             <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers><DataTrigger Binding="{Binding RecommendedTests.Count}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
                             <TextBlock Text="Próximas medições" Style="{StaticResource SectionTitle}"/>
@@ -202,15 +207,18 @@
                     <TextBlock Text="{Binding CategoryTestTitle}" Style="{StaticResource SectionTitle}"/>
                     <TextBlock Text="{Binding CategoryResultState}" FontWeight="SemiBold" Foreground="{StaticResource Muted}" Margin="0,0,0,8"/>
                     <TextBlock Text="{Binding CategoryResultContext}" Style="{StaticResource Note}" FontSize="13"/>
+                    <TextBlock Text="{Binding CategoryInterpretationStatus}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6"/>
                     <TextBlock Text="{Binding CategoryTestSummary}" Style="{StaticResource Note}"/>
                     <ItemsControl ItemsSource="{Binding CategoryTestIndicators}" ItemTemplate="{StaticResource CategoryIndicatorTemplate}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel></ItemsControl>
+                    <TextBlock Text="Próximo passo" FontWeight="SemiBold" Margin="0,8,0,4"/>
+                    <TextBlock Text="{Binding CategoryNextStep}" Style="{StaticResource Note}"/>
                     <Expander Header="Gráficos da medição" IsExpanded="False" Visibility="{Binding CategoryHasGraph, Converter={StaticResource BooleanVisibility}}">
                         <StackPanel Margin="0,12,0,0"><ComboBox ItemsSource="{Binding CategoryResultSeries}" SelectedItem="{Binding SelectedCategorySeries}" DisplayMemberPath="Name"/><controls:RelativeTimeSeriesChart Series="{Binding SelectedCategorySeries}" Height="180"/></StackPanel>
                     </Expander>
                     <Expander Header="Limites e detalhes técnicos" IsExpanded="False">
-                        <StackPanel Margin="0,8,0,0"><TextBlock Text="{Binding CategoryTestDetails}" Style="{StaticResource Note}"/><ItemsControl ItemsSource="{Binding CategoryTestLimitations}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource Note}"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl><Button Content="Abrir resultado completo" Command="{Binding NavigateCommand}" CommandParameter="resultados" HorizontalAlignment="Left" Style="{StaticResource QuietButton}"/></StackPanel>
+                        <StackPanel Margin="0,8,0,0"><TextBlock Text="{Binding CategoryTestDetails}" Style="{StaticResource Note}"/><ItemsControl ItemsSource="{Binding CategoryTestLimitations}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource Note}"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl><Button Content="Abrir resultado completo" Command="{Binding OpenCategoryTestCommand}" HorizontalAlignment="Left" Style="{StaticResource QuietButton}"/></StackPanel>
                     </Expander>
-                    <Button Content="Exportar resultado…" Command="{Binding ExportTestCommand}" HorizontalAlignment="Left" Style="{StaticResource QuietButton}" Margin="0,8,0,0"/>
+                    <Button Content="Exportar resultado…" Command="{Binding ExportCategoryTestCommand}" HorizontalAlignment="Left" Style="{StaticResource QuietButton}" Margin="0,8,0,0"/>
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -267,10 +275,23 @@
                         <StackPanel Margin="0,0,4,16">
                             <TextBlock Text="{Binding CompactHardwareSummary}" Style="{StaticResource Note}" Margin="0,0,0,24" AutomationProperties.Name="Resumo do computador"/>
                             <TextBlock Text="Verifique as configurações do Windows, drivers e interrupções." TextWrapping="Wrap" Margin="0,0,0,12"/>
-                            <Button Content="ANALISAR MEU PC" Command="{Binding AnalyzePcCommand}" Style="{StaticResource PrimaryButton}" Padding="24,13" HorizontalAlignment="Left" AutomationProperties.Name="Analisar meu PC"/>
+                            <WrapPanel><Button Content="ANALISAR MEU PC" Command="{Binding AnalyzePcCommand}" Style="{StaticResource PrimaryButton}" Padding="24,13" HorizontalAlignment="Left" AutomationProperties.Name="Analisar meu PC"/>
+                                <Button Content="INVESTIGAR DESEMPENHO" Command="{Binding InvestigatePerformanceCommand}" Padding="20,13" ToolTip="Escolha uma medição manual para investigar um sintoma."/></WrapPanel>
+                            <TextBlock Text="{Binding GeneralAnalysisScope}" Style="{StaticResource Note}" FontSize="13" Margin="0,6,0,0"/>
                             <TextBlock Text="Leitura e métricas passivas. Nenhuma configuração é alterada." Style="{StaticResource Note}" FontSize="13" Margin="0,4,0,20"/>
                             <Border Style="{StaticResource Card}" Visibility="{Binding TestIsActive, Converter={StaticResource BooleanVisibility}}"><ContentControl Content="{Binding}" ContentTemplate="{StaticResource ExecutionPanel}"/></Border>
                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ConsultationReportTemplate}" Visibility="{Binding HasHomeResult, Converter={StaticResource BooleanVisibility}}"/>
+                            <TextBlock Text="Últimas medições válidas" Style="{StaticResource SectionTitle}" Margin="0,16,0,8"/>
+                            <ItemsControl ItemsSource="{Binding HomeMeasurements}">
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                    <Border BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,0,1" Padding="0,10">
+                                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Margin="0,0,12,0"><TextBlock FontWeight="SemiBold" TextWrapping="Wrap"><Run Text="{Binding Name, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Reading, Mode=OneWay}"/></TextBlock><TextBlock Text="{Binding Context}" Style="{StaticResource Note}" FontSize="13" Margin="0,4,0,0"/><TextBlock Text="{Binding Interpretation}" Style="{StaticResource Note}" FontSize="13" Margin="0,4,0,0"/></StackPanel>
+                                            <Button Grid.Column="1" Content="Investigar" Command="{Binding DataContext.ChooseMeasurementCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding TestId}" Style="{StaticResource QuietButton}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <TextBlock Text="Configurações por categoria" Style="{StaticResource SectionTitle}" Margin="0,16,0,8"/>
                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource CategoryLinksTemplate}"/>
                             <TextBlock Text="Abra uma categoria para consultar valores e escolher uma medição." Style="{StaticResource Note}" FontSize="13"/>
@@ -399,9 +420,10 @@
                             <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16,20,16,16">
                                 <Border Style="{StaticResource Card}"><StackPanel>
                                     <TextBlock Text="Investigue atividade de drivers durante uma travada" Style="{StaticResource SectionTitle}"/>
-                                    <TextBlock Text="A captura de DPC/ISR registra eventos do Windows por 30 segundos. Reproduza o problema durante a captura e consulte o resumo ao terminar." Style="{StaticResource Note}"/>
+                                    <TextBlock Text="A captura de DPC/ISR registra eventos do Windows. Reproduza o problema durante a duração escolhida e consulte a interpretação ao terminar." Style="{StaticResource Note}"/>
+                                    <ComboBox ItemsSource="{Binding LatencyDurations}" SelectedItem="{Binding LatencySeconds}" AutomationProperties.Name="Duração da captura avançada"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0} segundos}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
                                     <TextBlock Text="O Windows solicitará autorização de administrador." Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,16"/>
-                                    <WrapPanel><Button Content="Capturar por 30 s…" Command="{Binding CaptureDpcCommand}" Style="{StaticResource PrimaryButton}"/><Button Content="Importar arquivo ETL…" Command="{Binding ImportEtlCommand}"/></WrapPanel>
+                                    <WrapPanel><Button Content="{Binding LatencyCaptureLabel}" Command="{Binding CaptureDpcCommand}" Style="{StaticResource PrimaryButton}"/><Button Content="Importar arquivo ETL…" Command="{Binding ImportEtlCommand}"/></WrapPanel>
                                     <Expander Header="O que esse teste mede"><TextBlock Text="DPC e ISR medem execução de rotinas do kernel. A captura pode identificar picos e módulos quando a resolução está disponível, mas não mede clique-para-fóton nem prova que um driver causou o problema. A captura é manual e acrescenta algum custo de processamento." Style="{StaticResource Note}" Margin="6,10,6,0"/></Expander>
                                 </StackPanel></Border>
                             </StackPanel></ScrollViewer>
@@ -568,7 +590,8 @@
                                 <TextBox Text="{Binding PingHost, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Destino da análise de rede"/>
                                 <TextBlock Text="Gateway testa sua rede local. A resposta ICMP não mede a latência dentro do jogo." Style="{StaticResource Note}" Margin="0"/>
                             </StackPanel>
-                            <CheckBox IsChecked="{Binding IncludeLatency}"><TextBlock Text="Travadas e drivers · captura DPC/ISR por 30 segundos" TextWrapping="Wrap"/></CheckBox>
+                            <CheckBox IsChecked="{Binding IncludeLatency}"><TextBlock Text="Travadas e drivers · incluir captura DPC/ISR" TextWrapping="Wrap"/></CheckBox>
+                            <ComboBox ItemsSource="{Binding LatencyDurations}" SelectedItem="{Binding LatencySeconds}" Visibility="{Binding IncludeLatency, Converter={StaticResource BooleanVisibility}}" AutomationProperties.Name="Duração da captura opcional"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0} segundos}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
                             <TextBlock Text="O Windows pedirá permissão de administrador. A captura acrescenta trabalho ao sistema e pode prolongar a análise." Style="{StaticResource Note}" Margin="22,0,0,12" Visibility="{Binding IncludeLatency, Converter={StaticResource BooleanVisibility}}"/>
                             <Button Content="ANALISAR MEU PC" Command="{Binding AnalyzePcCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Padding="22,12"/>
                             <Button Content="Auditar configurações e otimizações" Command="{Binding AuditConfigurationCommand}" HorizontalAlignment="Left"/>
@@ -640,10 +663,18 @@
                                     </DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 <TextBlock Text="Cada teste mede uma parte do caminho. Não representa o input lag total." Style="{StaticResource Note}" FontSize="13"/>
-                                <Expander Header="Executar teste de latência" IsExpanded="False">
+                                <Expander Header="Escolher investigação" IsExpanded="True">
                                     <StackPanel Margin="0,10,0,8">
                                         <TextBlock Text="Escolha a medição. Capturas e testes de carga pedem confirmação." Style="{StaticResource Note}"/>
-                                        <WrapPanel><Button Content="DPC / ISR · 30 segundos…" Command="{Binding CaptureDpcCommand}"/><Button Content="Memória · acesso e cópia…" Command="{Binding MemoryAccessCommand}"/></WrapPanel>
+                                        <TextBlock Text="DPC / ISR · atividade de drivers" FontWeight="SemiBold" Margin="0,8,0,6"/>
+                                        <WrapPanel>
+                                            <StackPanel Margin="0,0,16,0"><TextBlock Text="Objetivo" Foreground="{StaticResource Muted}" FontSize="13"/><ComboBox ItemsSource="{Binding LatencyGoals}" SelectedItem="{Binding LatencyGoal}" MinWidth="230" AutomationProperties.Name="Objetivo da captura DPC ISR"/></StackPanel>
+                                            <StackPanel><TextBlock Text="Duração" Foreground="{StaticResource Muted}" FontSize="13"/><ComboBox ItemsSource="{Binding LatencyDurations}" SelectedItem="{Binding LatencySeconds}" MinWidth="130" AutomationProperties.Name="Duração da captura DPC ISR"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0} segundos}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel>
+                                        </WrapPanel>
+                                        <TextBlock Text="{Binding LatencyDurationGuidance}" Style="{StaticResource Note}" FontSize="13"/>
+                                        <TextBlock Text="Contexto da captura" Foreground="{StaticResource Muted}" FontSize="13" Margin="0,0,0,6"/>
+                                        <TextBox Text="{Binding Workload, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Contexto da captura DPC ISR" ToolTip="Descreva o jogo, cena ou sintoma que vai reproduzir."/>
+                                        <WrapPanel><Button Content="{Binding LatencyCaptureLabel}" Command="{Binding CaptureDpcCommand}"/><Button Content="Importar ETL…" Command="{Binding ImportEtlCommand}" Style="{StaticResource QuietButton}"/></WrapPanel>
                                         <TextBlock Text="Rede · destino do ping" FontWeight="SemiBold" Margin="0,8,0,6"/>
                                         <TextBox Text="{Binding PingHost, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Destino do teste de latência"/>
                                         <Button Content="Rede · 20 pings" Command="{Binding PingCommand}" HorizontalAlignment="Left"/>
@@ -652,6 +683,9 @@
                                         <Button Content="Frametime · 30 segundos…" Command="{Binding CaptureFramesCommand}" HorizontalAlignment="Left"/>
                                         <TextBlock Text="{Binding PresentMonStatus}" Style="{StaticResource Note}" FontSize="13" Margin="0,0,0,6"/>
                                         <Button Content="Configurar PresentMon…" Command="{Binding ConfigurePresentMonCommand}" Style="{StaticResource QuietButton}" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="CPU, memória e disco · testes de carga" FontWeight="SemiBold" Margin="0,16,0,6"/>
+                                        <WrapPanel><Button Content="CPU · uma tarefa…" Command="{Binding CpuSingleCommand}"/><Button Content="Memória · acesso e cópia…" Command="{Binding MemoryAccessCommand}"/><Button Content="Disco · ler arquivo…" Command="{Binding DiskReadCommand}"/></WrapPanel>
+                                        <TextBlock Text="Aumentam temporariamente o uso do componente. A leitura do disco pode refletir cache." Style="{StaticResource Note}" FontSize="13"/>
                                     </StackPanel>
                                 </Expander>
                             </StackPanel>

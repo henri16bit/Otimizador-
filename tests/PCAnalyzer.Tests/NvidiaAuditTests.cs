@@ -26,13 +26,19 @@ public sealed class NvidiaAuditTests
         Assert.Equal("Herdado do perfil global", power.Facts["origin"]);
         Assert.Equal("false", power.Facts["explicitInProfile"]);
         Assert.Equal("true", power.Facts["configured"]);
+        Assert.Equal(GamePath, power.Facts["executable"]);
+        Assert.Equal("VALORANT-Win64-Shipping.exe", power.Facts["executableName"]);
+        Assert.Equal("true", power.Facts["observedProcess"]);
+        Assert.Equal("application", power.Facts["profileScope"]);
+        Assert.Equal("Não identificada", power.Facts["GraphicsApi"]);
+        Assert.Equal(Availability.InsufficientData.ToString(), power.Facts["GraphicsApiStatus"]);
         Assert.False(power.Facts.ContainsKey("effective"));
         Assert.Contains("Energia otimizada", power.Facts["predefinedValue"]);
         Assert.True(native.Disposed);
     }
 
     [Fact]
-    public async Task GlobalDifferenceIsComparisonOpportunityNotMeasuredPerformanceProblem()
+    public async Task GlobalDifferenceDoesNotBecomeAnOptimizationWithoutApplicableEvidence()
     {
         var native = new FakeDrs();
         native.Applications[GamePath] = App(3, "VALORANT");
@@ -41,10 +47,14 @@ public sealed class NvidiaAuditTests
         var provider = Provider(native, new NvDrsTarget(GamePath, [7], true));
         var report = PerformanceAuditEngine.Evaluate(provider.Rules, await provider.ReadAsync(default), DateTimeOffset.UtcNow);
         var assessment = Assert.Single(report.Assessments, x => x.Rule.Id == "nvidia.drs.power" && x.Observation.Scope.StartsWith("Aplicativo:"));
-        Assert.Equal(AuditClassification.ComparisonOpportunity, assessment.Classification);
+        Assert.NotEqual(AuditClassification.ComparisonOpportunity, assessment.Classification);
         Assert.Equal("true", assessment.Observation.Facts["explicitInProfile"]);
         Assert.Equal("true", assessment.Observation.Facts["differsFromGlobal"]);
-        Assert.Contains("falta uma captura", assessment.Reason);
+        Assert.Contains("falta uma captura", assessment.Observation.Facts["comparison"]);
+        var recommendation = AuditRecommendationClassifier.Classify(assessment);
+        Assert.Equal(AuditRecommendationKind.KeepCurrent, recommendation.Kind);
+        Assert.False(recommendation.IsImprovement);
+        Assert.Null(recommendation.BenefitConfidence);
         Assert.DoesNotContain(report.Assessments, x => x.Classification == AuditClassification.DemonstratedProblem);
     }
 
@@ -60,6 +70,35 @@ public sealed class NvidiaAuditTests
         Assert.Contains("critérios adicionais", candidate.Limitation);
         Assert.Equal("game.dll", candidate.Facts["fileInFolder"]);
         Assert.Equal("-game", candidate.Facts["commandLine"]);
+        var power = Assert.Single(rows, x => x.RuleId == "nvidia.drs.power" && x.Scope.StartsWith("Aplicativo:"));
+        Assert.Equal("false", power.Facts["observedProcess"]);
+        Assert.Equal("game.dll", power.Facts["fileInFolder"]);
+        Assert.Equal("-game", power.Facts["commandLine"]);
+        Assert.False(power.Facts.ContainsKey("effective"));
+    }
+
+    [Fact]
+    public async Task DesktopProcessAndGameCandidateKeepSeparateProfilesWithoutInventingGraphicsApi()
+    {
+        const string desktop = @"C:\Windows\explorer.exe";
+        var native = new FakeDrs();
+        native.Applications[desktop] = App(3, "Desktop");
+        native.Applications["VALORANT-Win64-Shipping.exe"] = App(4, "VALORANT");
+        var rows = await Provider(native, new NvDrsTarget(desktop, [78], true)).ReadAsync(default);
+        var desktopSetting = Assert.Single(rows, x => x.RuleId == "nvidia.drs.power" && x.Facts.GetValueOrDefault("executable") == desktop);
+        var gameSetting = Assert.Single(rows, x => x.RuleId == "nvidia.drs.power" && x.Facts.GetValueOrDefault("executable") == "VALORANT-Win64-Shipping.exe");
+        Assert.Equal("Desktop", desktopSetting.Facts["profile"]);
+        Assert.Equal("78", desktopSetting.Facts["runningProcessIds"]);
+        Assert.Equal("false", gameSetting.Facts["observedProcess"]);
+        Assert.Equal("", gameSetting.Facts["runningProcessIds"]);
+        Assert.All(rows.Where(x => x.RuleId.StartsWith("nvidia.drs.") && x.Status == Availability.Available), row =>
+        {
+            Assert.Equal("Não identificada", row.Facts["GraphicsApi"]);
+            Assert.DoesNotContain("SelectedProcess", row.Facts.Keys);
+        });
+        var global = Assert.Single(rows, x => x.RuleId == "nvidia.drs.power" && x.Scope == "Perfil global");
+        Assert.Equal("global", global.Facts["profileScope"]);
+        Assert.DoesNotContain("executable", global.Facts.Keys);
     }
 
     [Fact]

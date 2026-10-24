@@ -4,6 +4,7 @@
  Foreground="{StaticResource Text}" Focusable="False" UseLayoutRounding="True" MouseLeftButtonUp="OnOpenDetails">
  <Border BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,0,1" Padding="10,11" Background="Transparent" Cursor="Hand">
   <Grid>
+   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
    <Grid.ColumnDefinitions>
     <ColumnDefinition Width="1.65*"/>
     <ColumnDefinition Width="1.05*"/>
@@ -32,6 +33,19 @@
    <Button x:Name="SettingDetailsButton" Grid.Column="4" Content="Detalhes" Style="{StaticResource QuietButton}" Margin="0" Padding="9,6" MinHeight="34" VerticalAlignment="Center"
     Command="{Binding DataContext.OpenAuditSettingCommand, RelativeSource={RelativeSource AncestorType=Window}}"
     CommandParameter="{Binding}" AutomationProperties.Name="{Binding Name, StringFormat=Detalhes de {0}}"/>
+   <DockPanel Grid.Row="1" Grid.ColumnSpan="4" Margin="0,7,12,0">
+    <DockPanel.Style>
+     <Style TargetType="DockPanel">
+      <Style.Triggers>
+       <DataTrigger Binding="{Binding ShortReason}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+       <DataTrigger Binding="{Binding ShortReason}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+      </Style.Triggers>
+     </Style>
+    </DockPanel.Style>
+    <TextBlock Text="Motivo" Foreground="{StaticResource Muted}" FontSize="13" FontWeight="SemiBold" Margin="0,0,8,0"/>
+    <TextBlock x:Name="SettingShortReason" Text="{Binding ShortReason}" Foreground="{StaticResource Muted}" FontSize="13"
+     TextWrapping="Wrap" LineHeight="18" MaxHeight="36" ToolTip="{Binding ShortReason}"/>
+   </DockPanel>
   </Grid>
  </Border>
 </UserControl>

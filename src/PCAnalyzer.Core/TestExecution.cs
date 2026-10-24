@@ -9,7 +9,8 @@ public sealed record TechnicalResult(string Title, IReadOnlyList<string> Lines, 
     IReadOnlyList<Finding>? Findings = null, IReadOnlyList<string>? Limitations = null,
     Availability Availability = Availability.Available, bool Cancelled = false, DiagnosticSession? Session = null,
     string? ComparisonKey = null, DiagnosticReport? Report = null, bool Partial = false,
-    PerformanceAuditReport? Audit = null, string? SelectionContext = null);
+    PerformanceAuditReport? Audit = null, string? SelectionContext = null,
+    string? Interpretation = null, string? NextStep = null, string? InterpretationStatus = null);
 public sealed record TestProgress(string Stage, double? Fraction = null, long? CompletedUnits = null,
     string? Detail = null);
 public sealed record TestSession(Guid Id, string TestId, string Name, TestStatus Status, DateTimeOffset StartedAt,

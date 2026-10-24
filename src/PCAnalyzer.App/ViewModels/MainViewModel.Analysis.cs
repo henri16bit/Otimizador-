@@ -49,7 +49,7 @@ public sealed partial class MainViewModel
     }
     public bool HeaderIsAdvancedView => InterfaceMode == "Avançado" || SelectedSection?.Id is "componentes" or "processos" or "investigar" or "avancado";
     public IReadOnlyList<int> ObservationDurations { get; } = [15, 30, 60];
-    public int ObservationSeconds { get => _observationSeconds; set { if (ObservationDurations.Contains(value)) Set(ref _observationSeconds, value); } }
+    public int ObservationSeconds { get => _observationSeconds; set { if (ObservationDurations.Contains(value) && Set(ref _observationSeconds, value)) Notify(nameof(GeneralAnalysisScope)); } }
     public bool IncludePing { get => _includePing; set => Set(ref _includePing, value); }
     public bool IncludeLatency { get => _includeLatency; set => Set(ref _includeLatency, value); }
     public string PresentMonPath { get => _presentMonPath; private set => Set(ref _presentMonPath, value); }
@@ -128,6 +128,13 @@ public sealed partial class MainViewModel
         SuggestedActionCommand = new RelayCommand(parameter =>
         {
             if (parameter is not SuggestedNextAction action) return;
+            if (action.Id.StartsWith("measurement:", StringComparison.Ordinal) &&
+                Guid.TryParse(action.Id["measurement:".Length..], out var runId) && _validMeasurementTests.TryGetValue(runId, out var measured))
+            {
+                DisplayTestResult(measured);
+                Navigate("resultados");
+                return;
+            }
             switch (action.Target)
             {
                 case "rede": OpenInvestigationCommand.Execute("rede"); break;
@@ -171,10 +178,10 @@ public sealed partial class MainViewModel
         var includeLatency = !passiveOnly && IncludeLatency;
         var options = new DiagnosticOptions(seconds, includePing, includeLatency, gaming,
             PingHost.Trim(), SelectedAdapter?.Id, Workload, PresentMonPath, pid,
-            gaming && pid is null ? GameWaitProcessName.Trim() : null, GameWaitSeconds);
+            gaming && pid is null ? GameWaitProcessName.Trim() : null, GameWaitSeconds, LatencySeconds);
         var explanation = $"Observar o uso atual por {seconds} segundos e salvar um relatório. Use o PC como de costume durante a análise.\n\nNenhum teste de carga ou ajuste de configuração será iniciado.";
         if (includePing) explanation += "\n• Rede: enviar 20 pacotes ICMP para " + PingHost.Trim() + ".";
-        if (includeLatency) explanation += "\n• Drivers: captura ETW de 30 s, com confirmação UAC do Windows e possível custo adicional.";
+        if (includeLatency) explanation += $"\n• Drivers: captura ETW de {LatencySeconds} s, com confirmação UAC do Windows e possível custo adicional.";
         if (gaming) explanation += $"\n• Jogo: captura externa de quadros por 30 s. {(pid is { } p ? "PID " + p : "Aguardar " + GameWaitProcessName + " por até " + GameWaitSeconds + " s")}.";
         if ((gaming || includePing || includeLatency) && !Confirm(gaming ? "Analisar durante o jogo" : "Confirmar testes opcionais", explanation + "\n\nIniciar análise?")) return;
         try

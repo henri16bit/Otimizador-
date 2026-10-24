@@ -40,7 +40,10 @@ public sealed class StorageMemoryAuditProvider : IPerformanceAuditProvider
         try
         {
             var memory = Read("Win32_PhysicalMemory", @"root\cimv2", ct);
-            observations.AddRange(ReadMemory(memory.Rows, memory.Status));
+            var processors = Read("Win32_Processor", @"root\cimv2", ct);
+            var boards = Read("Win32_BaseBoard", @"root\cimv2", ct);
+            observations.AddRange(ReadMemory(memory.Rows, memory.Status,
+                MemoryPlatformFacts(processors.Rows, processors.Status, boards.Rows, boards.Status)));
             var physical = Read("MSFT_PhysicalDisk", storage, ct);
             observations.AddRange(ReadDisks(physical.Rows, physical.Status));
             if (physical.Rows.Count == 0) return observations;
@@ -63,12 +66,32 @@ public sealed class StorageMemoryAuditProvider : IPerformanceAuditProvider
         return observations;
     }
 
-    internal static IReadOnlyList<AuditObservation> ReadMemory(IReadOnlyList<Dictionary<string, object?>> rows, Availability status)
+    internal static IReadOnlyDictionary<string, string> MemoryPlatformFacts(
+        IReadOnlyList<Dictionary<string, object?>> processors, Availability processorStatus,
+        IReadOnlyList<Dictionary<string, object?>> boards, Availability boardStatus)
+    {
+        var facts = new Dictionary<string, string>
+        {
+            ["CpuContextStatus"] = processorStatus.ToString(), ["BaseboardContextStatus"] = boardStatus.ToString(),
+            ["PlatformContextSource"] = "Win32_Processor.Name / Win32_BaseBoard.Product; contexto SMBIOS/WMI, não leitura direta do chipset."
+        };
+        var cpuNames = processors.Select(p => Value(p, "Name")).OfType<string>().Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var boardNames = boards.Select(b => Value(b, "Product")).OfType<string>().Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (processorStatus == Availability.Available && cpuNames.Length == 1) facts["CpuName"] = cpuNames[0];
+        if (boardStatus == Availability.Available && boardNames.Length == 1) facts["BaseboardProduct"] = boardNames[0];
+        return facts;
+    }
+
+    internal static IReadOnlyList<AuditObservation> ReadMemory(IReadOnlyList<Dictionary<string, object?>> rows, Availability status,
+        IReadOnlyDictionary<string, string>? platform = null)
     {
         if (rows.Count == 0) return [Missing("memory.modules", "memory", "Módulos de RAM", "Memória", status == Availability.Available ? Availability.InsufficientData : status, "SMBIOS não retornou módulos verificáveis.")];
         return rows.Select((row, index) =>
         {
             var facts = Facts(row, "Manufacturer", "PartNumber", "Capacity", "DeviceLocator", "BankLabel", "ConfiguredClockSpeed", "Speed", "SMBIOSMemoryType", "DataWidth", "TotalWidth");
+            foreach (var pair in platform ?? new Dictionary<string, string>()) facts[pair.Key] = pair.Value;
             facts["configured"] = "true";
             facts["SPD"] = "Não lido"; facts["Timings"] = "Não expostos"; facts["Channels"] = "Não verificados"; facts["XMP"] = "Não verificado";
             var locator = Value(row, "DeviceLocator") ?? $"Módulo {index + 1}";

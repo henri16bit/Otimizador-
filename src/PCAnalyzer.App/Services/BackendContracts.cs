@@ -31,6 +31,11 @@ public interface IApplicationBackend : IAsyncDisposable, ITestHistoryStore
     Task<TechnicalResult> ImportFramesAsync(string path, PresentMonParseOptions options, CancellationToken ct);
     Task<TechnicalResult> CaptureFramesAsync(string executablePath, int processId, CancellationToken ct);
     Task<TechnicalResult> CaptureDpcAsync(CancellationToken ct);
+    Task<TechnicalResult> CaptureDpcAsync(int durationSeconds, string? context, CancellationToken ct)
+    {
+        if (durationSeconds is not (30 or 60 or 120)) throw new ArgumentOutOfRangeException(nameof(durationSeconds));
+        return CaptureDpcAsync(ct);
+    }
     Task<TechnicalResult> ImportEtlAsync(string path, CancellationToken ct);
     Task<IReadOnlyList<SelectionItem>> ListPowerPlansAsync(CancellationToken ct);
     Task<string> PreviewPowerPlanAsync(string id, CancellationToken ct);

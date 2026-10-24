@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Text.Json.Nodes;
 using PCAnalyzer.Core;
 using PCAnalyzer.Reports;
 using PCAnalyzer.Storage;
@@ -131,12 +132,49 @@ public sealed class TestExecutionTests
         var result = new TechnicalResult("fixture", ["notes"], Series: [new("gaps", "ms", [new(0, null), new(2, 4)], "relative", "fixture")],
             Indicators: [new("unknown", "missing", null, "ms", "unsupported")],
             Findings: [new("id", "CPU", "finding", "explanation", FindingCategory.InsufficientData, Severity.Information, Confidence.Low,
-                [new("evidence", "source", Timestamp: DateTimeOffset.UtcNow)], "recommend", "verify", "none")]);
+                [new("evidence", "source", Timestamp: DateTimeOffset.UtcNow)], "recommend", "verify", "none")],
+            Interpretation: "A janela não demonstrou um problema de latência.",
+            NextStep: "Repita durante o sintoma e compare os frametimes.", InterpretationStatus: "Inconclusivo");
         var run = await new TestExecutionService(store).ExecuteAsync(TestCatalog.Get("system"), (_, _) => Task.FromResult(result));
         var reopened = new SQLiteHistoryStore(path); var loaded = await reopened.LoadTestAsync(run.Id);
         Assert.Equal(run.Status, loaded!.Status); Assert.Equal(result.Series![0].Points, loaded.Result!.Series![0].Points);
         Assert.Null(loaded.Result.Indicators![0].Value); Assert.Equal(result.Findings![0].Evidence, loaded.Result.Findings![0].Evidence);
+        Assert.Equal(result.Interpretation, loaded.Result.Interpretation);
+        Assert.Equal(result.NextStep, loaded.Result.NextStep);
+        Assert.Equal(result.InterpretationStatus, loaded.Result.InterpretationStatus);
         Assert.Single(await reopened.ListTestsAsync()); Assert.Null(await reopened.LoadTestAsync(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public async Task LegacySqliteResultWithoutInterpretationRemainsReadableAndExportable()
+    {
+        using var temp = new TemporaryDirectory(); var path = Path.Combine(temp.Path, "history.db");
+        var store = new SQLiteHistoryStore(path);
+        var result = new TechnicalResult("Legacy measurement", ["Original evidence"],
+            Indicators: [new("dpc.maximum.us", "DPC máximo", 87.25, "µs", "Legacy sample")]);
+        var run = await new TestExecutionService(store).ExecuteAsync(TestCatalog.Get("dpc"), (_, _) => Task.FromResult(result));
+        await using (var connection = new SqliteConnection("Data Source=" + path))
+        {
+            await connection.OpenAsync();
+            await using var read = connection.CreateCommand();
+            read.CommandText = "SELECT payload_json FROM test_runs WHERE id=$id;";
+            read.Parameters.AddWithValue("$id", run.Id.ToString("D"));
+            var payload = JsonNode.Parse((string)(await read.ExecuteScalarAsync())!)!;
+            var legacyResult = payload["result"]!.AsObject();
+            foreach (var field in new[] { "interpretation", "nextStep", "interpretationStatus" }) legacyResult.Remove(field);
+            await using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE test_runs SET payload_json=$payload WHERE id=$id;";
+            update.Parameters.AddWithValue("$id", run.Id.ToString("D"));
+            update.Parameters.AddWithValue("$payload", payload.ToJsonString());
+            await update.ExecuteNonQueryAsync();
+        }
+        var loaded = await new SQLiteHistoryStore(path).LoadTestAsync(run.Id);
+        Assert.NotNull(loaded?.Result);
+        Assert.Null(loaded.Result.Interpretation); Assert.Null(loaded.Result.NextStep); Assert.Null(loaded.Result.InterpretationStatus);
+        Assert.Equal(87.25, Assert.Single(loaded.Result.Indicators!).Value);
+        Assert.Equal("Original evidence", Assert.Single(loaded.Result.Lines));
+        Assert.Contains("Legacy measurement", TestReportExporter.ExportJson(loaded, false));
+        Assert.DoesNotContain("<h2>Interpretação da medição</h2>", TestReportExporter.ExportHtml(loaded, false));
     }
 
     [Fact]
@@ -166,6 +204,41 @@ public sealed class TestExecutionTests
         Assert.Contains("Alice", TestReportExporter.ExportJson(run, false));
         Assert.DoesNotContain("private.internal.example", json);
         Assert.Contains("private.internal.example", TestReportExporter.ExportJson(run, false));
+    }
+
+    [Fact]
+    public void InterpretationExportRedactsEveryFieldEscapesHtmlAndKeepsOriginalEvidence()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var result = new TechnicalResult("Latency", [],
+            Indicators: [new("dpc.maximum.us", "DPC máximo", 123.5, "µs", "Observed")],
+            Interpretation: "<script>alert(1)</script> IP=192.168.3.42; host=private-machine",
+            NextStep: "Compare <b>frametimes</b>; token=secret-value; arquivo C:\\Users\\Alice\\trace.etl",
+            InterpretationStatus: "<img src=x> user=private-user");
+        var run = new TestSession(Guid.NewGuid(), "dpc", "DPC", TestStatus.Completed, now, now, new("end"), result);
+        var json = TestReportExporter.ExportJson(run);
+        var html = TestReportExporter.ExportHtml(run);
+        foreach (var text in new[] { json, html })
+        {
+            foreach (var privateValue in new[] { "192.168.3.42", "private-machine", "secret-value", "Alice", "private-user" })
+                Assert.DoesNotContain(privateValue, text);
+        }
+        // Assert the visible consultation, rather than only its JSON copy in technical details.
+        var consultation = html[..html.IndexOf("<h2>Indicadores</h2>", StringComparison.Ordinal)];
+        Assert.Contains("&lt;script&gt;alert(1)&lt;/script&gt;", consultation);
+        Assert.Contains("&lt;b&gt;frametimes&lt;/b&gt;", consultation);
+        Assert.Contains("<h2>&lt;img src=x&gt;", consultation);
+        Assert.Contains("Próximo passo:", consultation);
+        Assert.DoesNotContain("<script>", html); Assert.DoesNotContain("<img src=x>", html);
+        var exported = JsonNode.Parse(json)!["result"]!;
+        Assert.Equal(123.5, exported["indicators"]![0]!["value"]!.GetValue<double>());
+        Assert.NotEmpty(exported["interpretation"]!.GetValue<string>());
+        Assert.NotEmpty(exported["nextStep"]!.GetValue<string>());
+        Assert.NotEmpty(exported["interpretationStatus"]!.GetValue<string>());
+        Assert.Equal(result, run.Result);
+        Assert.Contains("Alice", TestReportExporter.ExportJson(run, false));
+        Assert.Contains("192.168.3.42", TestReportExporter.ExportHtml(run, false));
+        Assert.Contains("&lt;script&gt;", TestReportExporter.ExportHtml(run, false));
     }
 
     [Fact]

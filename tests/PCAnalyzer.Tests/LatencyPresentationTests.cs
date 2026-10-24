@@ -106,7 +106,9 @@ public sealed class LatencyPresentationTests
         aggregate.ObserveLatency("ThreadedDPC", 0, 1, 2000, 1500);
         aggregate.ObserveLatency("ISR", 0, 1, 3000, 3000);
         aggregate.ObserveLatency("DPC", 0, 1, 9999, double.NaN);
-        var capture = Capture(aggregate, 5);
+        var shortCapture = Capture(aggregate, 5);
+        Assert.Null(LatencyResultPresentation.Summarize(shortCapture).Single(s => s.Kind == "ISR").RecurrenceEventCount);
+        var capture = shortCapture with { Duration = TimeSpan.FromSeconds(4) };
         var dpc = LatencyResultPresentation.Summarize(capture).Single(s => s.Kind == "DPC");
         var isr = LatencyResultPresentation.Summarize(capture).Single(s => s.Kind == "ISR");
         Assert.Equal(3, dpc.RecurrenceEventCount);

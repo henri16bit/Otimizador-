@@ -13,6 +13,42 @@ public sealed class DeviceAuditTests
         "", "e1dexpress", @"PCI\VEN_8086&DEV_15FA", "PCI", "PCI bus 0", "", 0, 0, []);
 
     [Theory]
+    [InlineData(RegistryValueKind.String, @"\SystemRoot\System32\drivers\different-binary.sys")]
+    [InlineData(RegistryValueKind.ExpandString, @"%SystemRoot%\System32\drivers\different-binary.sys")]
+    public void DeviceBinaryIdentityComesFromActualServiceImagePath(RegistryValueKind kind, string path)
+    {
+        var facts = DeviceInterruptAuditProvider.DriverImageFacts(Device.Service, new(true, path, kind));
+        var identity = DeviceInterruptAuditProvider.IdentityObservation(Device, facts);
+        Assert.Equal(path, identity.Facts["driverImagePath"]);
+        Assert.Equal(Availability.Available.ToString(), identity.Facts["driverImagePathStatus"]);
+        Assert.Equal(kind.ToString(), identity.Facts["driverImagePathRegistryType"]);
+        Assert.Equal(@"HKLM\SYSTEM\CurrentControlSet\Services\e1dexpress\ImagePath", identity.Facts["driverImagePathSource"]);
+        Assert.DoesNotContain("e1dexpress.sys", identity.Facts["driverImagePath"]);
+    }
+
+    [Theory]
+    [InlineData("absent")]
+    [InlineData("denied")]
+    [InlineData("wrong-type")]
+    [InlineData("empty")]
+    [InlineData("invalid-service")]
+    public void UnreadableOrInvalidServiceImagePathNeverBecomesAConventionalDriverName(string scenario)
+    {
+        var value = scenario switch
+        {
+            "absent" => new DeviceRegistryValue(false, null, null),
+            "denied" => new(false, null, null, Availability.PermissionRequired, "Acesso negado"),
+            "wrong-type" => new(true, 1, RegistryValueKind.DWord),
+            "empty" => new(true, "  ", RegistryValueKind.String),
+            _ => new(true, @"C:\drivers\e1dexpress.sys", RegistryValueKind.String)
+        };
+        var facts = DeviceInterruptAuditProvider.DriverImageFacts(scenario == "invalid-service" ? @"bad\other" : Device.Service, value);
+        Assert.False(facts.ContainsKey("driverImagePath"));
+        if (scenario == "denied") Assert.Equal(Availability.PermissionRequired.ToString(), facts["driverImagePathStatus"]);
+        if (scenario == "absent") Assert.Equal("absent", facts["driverImagePathPresence"]);
+    }
+
+    [Theory]
     [InlineData(4)]
     [InlineData(8)]
     public void NativeCoreRecordsPreserveGroupsAndNonAdjacentSmtPairs(int pointerSize)

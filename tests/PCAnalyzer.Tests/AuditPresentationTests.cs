@@ -13,7 +13,7 @@ public sealed class AuditPresentationTests
         Assert.False(row.IsImprovement);
         Assert.Null(row.TestId);
         Assert.Equal("Informativo", row.StatusLabel);
-        Assert.Contains("HardwareInterface: False", Assert.Single(row.TechnicalDetails));
+        Assert.Contains(row.TechnicalDetails, detail => detail.Contains("HardwareInterface: False", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -26,11 +26,11 @@ public sealed class AuditPresentationTests
         var row = Assert.Single(AuditPresentationBuilder.Build(report));
         Assert.Equal("Desabilitado no Windows", row.CurrentValue);
         Assert.Equal("Informativo", row.StatusLabel);
-        Assert.Equal(AuditRecommendationKind.KeepCurrent, row.RecommendationKind);
+        Assert.Equal(AuditRecommendationKind.NoUniversalValue, row.RecommendationKind);
         Assert.False(row.IsImprovement);
         Assert.False(row.IsAdequate);
         Assert.Null(row.TestId);
-        Assert.Contains("pnpProblemCode: 22", Assert.Single(row.TechnicalDetails));
+        Assert.Contains(row.TechnicalDetails, detail => detail.Contains("pnpProblemCode: 22", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -43,7 +43,10 @@ public sealed class AuditPresentationTests
             { ["pnpProblemCode"] = "10", ["busEnumerator"] = bus });
         var invalidMsi = Observation("devices.interrupt.msi", "virtual", name, "9", new()
             { ["decimal"] = "9", ["invalid"] = "Valor fora do contrato" });
-        var row = Assert.Single(AuditPresentationBuilder.Build(Evaluate(identity, invalidMsi)));
+        var report = Evaluate(identity, invalidMsi);
+        Assert.DoesNotContain(report.Assessments, assessment => assessment.Classification is
+            AuditClassification.PossibleProblem or AuditClassification.ComparisonOpportunity);
+        var row = Assert.Single(AuditPresentationBuilder.Build(report));
         Assert.False(row.IsImprovement);
         Assert.Equal("neutral", row.Tone);
         Assert.Null(row.TestId);
@@ -59,7 +62,7 @@ public sealed class AuditPresentationTests
         var rule = Rule(observation.RuleId) with { Support = AuditSupport.Ignored };
         var row = Assert.Single(AuditPresentationBuilder.Build(PerformanceAuditEngine.Evaluate([rule], [observation], DateTimeOffset.UtcNow)));
         Assert.Equal("8", row.CurrentValue);
-        Assert.Equal("Manter", row.RecommendedValue);
+        Assert.Equal("Não alterar para desempenho", row.RecommendedValue);
         Assert.Equal("Sem efeito documentado", row.StatusLabel);
         Assert.False(row.IsImprovement);
         Assert.False(row.IsAdequate);
@@ -67,33 +70,31 @@ public sealed class AuditPresentationTests
     }
 
     [Theory]
-    [InlineData("windows.scheduler.separation", "42")]
     [InlineData("network.advanced", "Disabled")]
     [InlineData("nvidia.power", "Prefer maximum performance")]
     public void ObservedValuesDoNotBecomeUniversalRecommendations(string ruleId, string value)
     {
         var row = Assert.Single(AuditPresentationBuilder.Build(Evaluate(Observation(ruleId, "setting", "Configuração", value))));
         Assert.Equal(AuditRecommendationKind.NoUniversalValue, row.RecommendationKind);
-        Assert.Equal("Depende de medição", row.RecommendedValue);
+        Assert.Equal("Sem recomendação fundamentada", row.RecommendedValue);
         Assert.False(row.IsImprovement);
         Assert.True(row.IsUnassessed);
         Assert.Null(row.TestId);
     }
 
     [Fact]
-    public void AnExplicitComparisonHypothesisRemainsOptionalAndUsesARealDiagnostic()
+    public void AProviderComparisonFlagDoesNotCreateAnOpportunityWithoutASpecificPolicy()
     {
         var observation = Observation("network.advanced", "nic:moderation", "Interrupt Moderation", "Enabled", new()
             { ["comparison"] = "Comparar a variação de RTT sob a mesma carga." });
         var row = Assert.Single(AuditPresentationBuilder.Build(Evaluate(observation)));
         Assert.Equal("Ativado", row.CurrentValue);
-        Assert.Equal(AuditRecommendationKind.Compare, row.RecommendationKind);
-        Assert.True(row.IsComparison);
-        Assert.True(row.IsImprovement);
+        Assert.Equal(AuditRecommendationKind.NoUniversalValue, row.RecommendationKind);
+        Assert.False(row.IsComparison);
+        Assert.False(row.IsImprovement);
         Assert.False(row.IsAdequate);
-        Assert.Equal("ping", row.TestId);
-        Assert.True(TestCatalog.Get(row.TestId!).Implemented);
-        Assert.Contains("ICMP não comprova", row.Validation);
+        Assert.Null(row.TestId);
+        Assert.Equal("Sem recomendação fundamentada", row.RecommendedValue);
     }
 
     [Theory]
@@ -106,14 +107,14 @@ public sealed class AuditPresentationTests
             { Status = state, Limitation = "<Objs><S>System.InvalidOperationException: secret</S></Objs>" };
         var row = Assert.Single(AuditPresentationBuilder.Build(Evaluate(observation)));
         Assert.Equal("Não identificado", row.CurrentValue);
-        Assert.Equal("Não determinado", row.RecommendedValue);
+        Assert.Equal(state == Availability.Unsupported ? "Não aplicável neste ambiente" : "Leitura necessária", row.RecommendedValue);
         Assert.Equal(AuditRecommendationKind.Unavailable, row.RecommendationKind);
         Assert.True(row.IsUnassessed);
         Assert.False(row.IsImprovement);
-        Assert.Equal("Insuficiente", row.ConfidenceLabel);
+        Assert.Equal("Dados insuficientes", row.ConfidenceLabel);
         Assert.Null(row.TestId);
         Assert.DoesNotContain("<Objs>", row.Reason);
-        Assert.Contains("<Objs>", Assert.Single(row.TechnicalDetails));
+        Assert.Contains(row.TechnicalDetails, detail => detail.Contains("<Objs>", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -122,7 +123,7 @@ public sealed class AuditPresentationTests
         var row = Assert.Single(AuditPresentationBuilder.Build(Evaluate(Observation("windows.mmcss.responsiveness", "absent",
             "SystemResponsiveness", null, new() { ["presence"] = "absent" }))));
         Assert.Equal("Sem valor explícito", row.CurrentValue);
-        Assert.Equal("Não determinado", row.RecommendedValue);
+        Assert.Equal("Leitura necessária", row.RecommendedValue);
         Assert.False(row.IsImprovement);
         Assert.True(row.IsUnassessed);
     }
@@ -144,7 +145,7 @@ public sealed class AuditPresentationTests
             row.Reason, row.Risks, row.Validation, row.PossibleImpact, row.Subcategory })
             Assert.DoesNotContain(technical, field);
         Assert.Same(observation, Assert.Single(row.Evidence).Observation);
-        Assert.Contains(technical, Assert.Single(row.TechnicalDetails));
+        Assert.Contains(row.TechnicalDetails, detail => detail.Contains(technical, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -157,25 +158,28 @@ public sealed class AuditPresentationTests
             Facts = new Dictionary<string, string> { ["registryView"] = "64-bit", ["evidence"] = path + " [Registry64]", ["registryType"] = "String" } };
         var row = Assert.Single(AuditPresentationBuilder.Build(Evaluate(first, second)));
         Assert.Equal(2, row.Evidence.Count);
-        Assert.Equal(2, row.TechnicalDetails.Count);
+        Assert.Equal(2, row.TechnicalDetails.Count(detail => detail.Contains("Origem:", StringComparison.Ordinal)));
         Assert.Contains(row.TechnicalDetails, detail => detail.Contains("[Registry32]", StringComparison.Ordinal));
         Assert.Contains(row.TechnicalDetails, detail => detail.Contains("[Registry64]", StringComparison.Ordinal));
         Assert.Equal(2, AuditPresentationBuilder.Build(Evaluate(first, second with { RawValue = "Medium" })).Count);
     }
 
     [Fact]
-    public void BackgroundProcessesAreAggregatedButGameAndRealtimeRemainActionable()
+    public void EachProcessKeepsItsIdentityAndObservedPriorityWhileRealtimeRemainsActionable()
     {
         AuditObservation Process(string id, string name, string priority) => Observation("windows.process.scheduling", id, name, priority,
-            new() { ["PriorityClass"] = priority, ["ExecutableName"] = name });
+            new() { ["PriorityClass"] = priority, ["ExecutableName"] = name, ["PID"] = id[4..], ["AffinityMask"] = "0xF" });
         var rows = AuditPresentationBuilder.Build(Evaluate(Process("pid:1", "one.exe", "Normal"), Process("pid:2", "two.exe", "Normal"),
             Process("pid:3", "VALORANT-Win64-Shipping.exe", "Normal"), Process("pid:4", "audio.exe", "RealTime")));
-        Assert.Equal(3, rows.Count);
-        Assert.Equal(2, Assert.Single(rows, row => row.Evidence.Count == 2).Evidence.Count);
+        Assert.Equal(4, rows.Count);
+        Assert.All(rows, row => Assert.Single(row.Evidence));
+        Assert.Contains(rows, row => row.Name.Contains("one.exe", StringComparison.Ordinal));
+        Assert.Contains(rows, row => row.Name.Contains("two.exe", StringComparison.Ordinal));
+        Assert.All(rows, row => Assert.Contains("0xF", row.CurrentValue));
         Assert.Equal("games", Assert.Single(rows, row => row.Evidence.Any(e => e.Observation.InstanceId == "pid:3")).CategoryId);
         var realtime = Assert.Single(rows, row => row.IsImprovement);
         Assert.Contains("tempo real", realtime.CurrentValue);
-        Assert.Equal("Investigar antes de alterar", realtime.RecommendedValue);
+        Assert.Equal("Rever o uso de prioridade Tempo real", realtime.RecommendedValue);
         Assert.Equal(realtime, rows[0]);
         Assert.Equal(4, rows.Sum(row => row.Evidence.Count));
     }
@@ -209,9 +213,10 @@ public sealed class AuditPresentationTests
         var row = Assert.Single(AuditPresentationBuilder.Build(Evaluate(observation)));
         Assert.Equal("8 GiB · 2933 MT/s configurados", row.CurrentValue);
         Assert.False(row.IsImprovement);
-        Assert.Equal(AuditRecommendationKind.NoUniversalValue, row.RecommendationKind);
+        Assert.Equal(AuditRecommendationKind.KeepCurrent, row.RecommendationKind);
         Assert.Equal("memory-access", row.TestId);
-        Assert.Contains("não isola a latência DRAM", row.Validation);
+        Assert.Contains("CPU/placa", row.Validation);
+        Assert.DoesNotContain("B460", row.Reason);
     }
 
     [Fact]
@@ -237,7 +242,7 @@ public sealed class AuditPresentationTests
         var profile = Assert.Single(rows, row => row.CategoryId == "nvidia");
         Assert.Equal("Prefer maximum performance", profile.CurrentValue);
         Assert.Contains("valor herdado", profile.Description);
-        Assert.Contains("0x00000001", Assert.Single(profile.TechnicalDetails));
+        Assert.Contains(profile.TechnicalDetails, detail => detail.Contains("0x00000001", StringComparison.Ordinal));
         Assert.Equal("Equilibrado", Assert.Single(rows, row => row.CategoryId == "windows").CurrentValue);
         Assert.DoesNotContain(rows, row => row.IsImprovement);
     }
@@ -249,10 +254,11 @@ public sealed class AuditPresentationTests
             Observation("windows.process.scheduling", "normal", "Normal", "Normal", new() { ["PriorityClass"] = "Normal" }),
             Observation("windows.process.scheduling", "realtime", "Realtime", "RealTime", new() { ["PriorityClass"] = "RealTime" }),
             Observation("windows.bcd.clock", "bcd", "useplatformclock", "Yes"),
-            Observation("windows.scheduler.separation", "separation", "Win32PrioritySeparation", "42")));
-        Assert.Equal(2, rows.Count(row => row.IsImprovement));
-        Assert.Single(rows, row => row.IsComparison);
-        Assert.Single(rows, row => row.IsAdequate);
+            Observation("windows.scheduler.separation", "separation", "Win32PrioritySeparation", "42"),
+            Observation("custom.unknown", "unknown", "Propriedade desconhecida", "Enabled")));
+        Assert.Single(rows, row => row.IsImprovement);
+        Assert.DoesNotContain(rows, row => row.IsComparison);
+        Assert.Equal(3, rows.Count(row => row.IsAdequate));
         Assert.Single(rows, row => row.IsUnassessed);
         Assert.All(rows, row => Assert.NotEqual(AuditRecommendationKind.SpecificValue, row.RecommendationKind));
         Assert.DoesNotContain(rows, row => row.IsAdequate && row.IsImprovement);

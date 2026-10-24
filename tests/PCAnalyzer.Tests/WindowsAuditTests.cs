@@ -8,6 +8,42 @@ namespace PCAnalyzer.Tests;
 [UnconditionalSuppressMessage("Interoperability", "CA1416", Justification = "RegistryValueKind fixture constants are decoded as data; native provider execution is platform-guarded.")]
 public sealed class WindowsAuditTests
 {
+    [Fact]
+    public void ProcessIdentityKeepsAnalyzerAndForegroundSeparateFromTheSelectedGame()
+    {
+        var created = new DateTimeOffset(2026, 10, 23, 10, 0, 0, TimeSpan.Zero);
+        var analyzer = WindowsConfigurationAuditProvider.ProcessIdentityFacts(10, 10, 20, "PCAnalyzer", @"C:\Tools\PCAnalyzer.exe", created);
+        var desktop = WindowsConfigurationAuditProvider.ProcessIdentityFacts(20, 10, 20, "explorer", @"C:\Windows\explorer.exe", created);
+        var game = WindowsConfigurationAuditProvider.ProcessIdentityFacts(30, 10, 20, "VALORANT-Win64-Shipping",
+            @"C:\Games\VALORANT-Win64-Shipping.exe", created.AddSeconds(1));
+        Assert.Equal("True", analyzer["IsAnalyzerProcess"]);
+        Assert.Equal("True", desktop["foreground"]);
+        Assert.Equal("explorer.exe", desktop["ExecutableName"]);
+        Assert.Equal("VALORANT-Win64-Shipping.exe", game["ExecutableName"]);
+        Assert.Equal("False", game["foreground"]);
+        Assert.NotEqual(game["ProcessStartedAtUtc"], desktop["ProcessStartedAtUtc"]);
+        Assert.All(new[] { analyzer, desktop, game }, facts =>
+        {
+            Assert.DoesNotContain("SelectedProcess", facts.Keys);
+            Assert.DoesNotContain("IsSelectedProcess", facts.Keys);
+            Assert.DoesNotContain("PriorityClass", facts.Keys);
+            Assert.DoesNotContain("AffinityMask", facts.Keys);
+        });
+    }
+
+    [Fact]
+    public void UnavailableProcessPathAndCreationRemainUnavailableInsteadOfUsingAnalyzerIdentity()
+    {
+        var partial = WindowsConfigurationAuditProvider.ProcessIdentityFacts(41, 10, 20, "game", null, null);
+        Assert.Equal("game.exe", partial["ExecutableName"]);
+        Assert.Contains("caminho não confirmado", partial["ExecutableIdentitySource"]);
+        Assert.DoesNotContain("ExecutablePath", partial.Keys);
+        Assert.DoesNotContain("ProcessStartedAtUtc", partial.Keys);
+        var missing = WindowsConfigurationAuditProvider.ProcessIdentityFacts(42, 10, 20, null, null, null);
+        Assert.DoesNotContain("ExecutableName", missing.Keys);
+        Assert.Equal("42", missing["PID"]);
+    }
+
     [Theory]
     [InlineData(0x26, "0x00000026 (38 decimal)", "38")]
     [InlineData(0x2A, "0x0000002A (42 decimal)", "42")]
@@ -189,8 +225,9 @@ public sealed class WindowsAuditTests
         Assert.Null(WindowsConfigurationAuditProvider.ParseBcdValue(text, "disabledynamictick"));
         var row = new AuditObservation("windows.bcd.useplatformclock", "bcd:useplatformclock", "useplatformclock", "Boot", "Não",
             Availability.Available, "bcdedit /enum {current}", new Dictionary<string, string> { ["presence"] = "present", ["configured"] = "true" });
-        Assert.Equal(AuditClassification.ComparisonOpportunity, Interpret(row).Classification);
-        Assert.Contains("não comprova ganho", Interpret(row).Reason);
+        Assert.Equal(AuditClassification.Adequate, Interpret(row).Classification);
+        Assert.Contains("não confirma a fonte de temporização efetiva", Interpret(row).Reason);
+        Assert.Equal(AuditRecommendationKind.KeepCurrent, AuditRecommendationClassifier.Classify(Interpret(row)).Kind);
     }
 
     [Fact]

@@ -15,23 +15,6 @@ public sealed partial class ApplicationBackend
         Action<TelemetryBatch> publishBatch, CancellationToken ct)
     {
         var result = await new DiagnosticOrchestrator(new AnalysisProbe(this)).RunAsync(options, progress, publishBatch, ct);
-        // Read configuration after the observation window so the inventory work does not
-        // become part of the CPU/disk load being interpreted as the user's workload.
-        if (!ct.IsCancellationRequested && !result.Cancelled)
-        {
-            try
-            {
-                var audit = await AuditConfigurationAsync(progress, ct);
-                result = DiagnosticAuditIntegration.Merge(result, audit);
-            }
-            catch (Exception error)
-            {
-                if (error is not OperationCanceledException) LogError("analysis.audit", error);
-                result = DiagnosticAuditIntegration.Merge(result, new("Auditoria interrompida", [], Partial: true,
-                    Cancelled: ct.IsCancellationRequested, Availability: Availability.InsufficientData,
-                    Limitations: ["A auditoria de configurações não terminou; as medições anteriores foram preservadas."]));
-            }
-        }
         if (result.Session is { } session)
         {
             try { result = result with { Session = await WithChangesAsync(session, CancellationToken.None) }; }
@@ -95,11 +78,14 @@ public sealed partial class ApplicationBackend
             return backend._lastInventory ?? new(DateTimeOffset.UtcNow, [],
                 [new("Inventário", Availability.Collecting, "A identificação ainda está em andamento; CPU/RAM e outras fontes independentes continuam disponíveis.")]);
         }
+        public async Task<TechnicalResult?> ReadConfigurationAsync(DiagnosticOptions options, IProgress<TestProgress> progress, CancellationToken ct) =>
+            await backend.AuditConfigurationAsync(progress, ct);
+        public Task PrepareObservationAsync(CancellationToken ct) => backend.ResetTelemetryAsync(ct);
         public Task<TelemetryBatch> CollectAsync(TimeSpan interval, CancellationToken ct) => backend.CollectAsync(interval, ct);
         private Task<NetworkBaseline> InitialNetworkAsync(DiagnosticOptions options, CancellationToken ct)
         {
-            // Network inspection and ICMP begin in parallel. Both must keep the same
-            // initial choice even if the adapter list or default gateway changes later.
+            // Inventory and optional ICMP share the same initial choice even if the
+            // adapter list or default gateway changes during observation.
             lock (_networkGate) return _networkBaseline ??= DiscoverInitialNetworkAsync(options, ct);
         }
         private async Task<NetworkBaseline> DiscoverInitialNetworkAsync(DiagnosticOptions options, CancellationToken ct)
@@ -149,6 +135,10 @@ public sealed partial class ApplicationBackend
             };
         }
         public Task<TechnicalResult> CaptureLatencyAsync(CancellationToken ct) => backend.CaptureDpcAsync(ct);
+        public Task<TechnicalResult> CaptureLatencyAsync(DiagnosticOptions options, CancellationToken ct) =>
+            backend.CaptureDpcAsync(options.LatencySeconds,
+                string.IsNullOrWhiteSpace(options.Workload) ? null : $"{options.Workload}; captura opcional de {options.LatencySeconds} s" +
+                (_gamePid is { } pid ? $"; processo selecionado PID {pid}" : "; nenhum processo de jogo confirmado"), ct);
         public Task<TechnicalResult> CaptureFramesAsync(DiagnosticOptions options, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();

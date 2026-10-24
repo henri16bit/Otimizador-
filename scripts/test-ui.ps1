@@ -17,7 +17,7 @@ try {
     }
     if ($process.ExitCode -ne 0) { throw "Os cenários WPF encerraram com código $($process.ExitCode)." }
     $result = Get-Content -LiteralPath (Join-Path $artifacts 'ui-flow-result.json') -Raw | ConvertFrom-Json
-    if (!$result.success -or $result.checks.Count -lt 41 -or !$result.fixtureDataOnly -or $result.hardwareOrConfigurationChanged) {
+    if (!$result.success -or $result.checks.Count -lt 53 -or !$result.fixtureDataOnly -or $result.hardwareOrConfigurationChanged) {
         throw 'Os cenários WPF não confirmaram todos os fluxos sem alterações reais de sistema.'
     }
     Write-Host "$($result.checks.Count) cenários WPF aprovados."

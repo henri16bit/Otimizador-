@@ -14,7 +14,8 @@ public sealed record AuditSettingPresentation(
     AuditRecommendationKind RecommendationKind, bool IsImprovement, bool IsComparison,
     bool IsAdequate, bool IsUnassessed, int Priority, string Reason, string PossibleImpact,
     string ConfidenceLabel, string Validation, string Risks, IReadOnlyList<AuditAssessment> Evidence,
-    string? TestId, IReadOnlyList<string> TechnicalDetails);
+    string? TestId, IReadOnlyList<string> TechnicalDetails, string ShortReason = "",
+    AuditFunctionalKind FunctionalKind = AuditFunctionalKind.Incomplete);
 
 /// <summary>
 /// Presentation policy never treats an enum, registry presence, or missing measurement as an ideal value.
@@ -46,13 +47,6 @@ public static class AuditPresentationBuilder
     private static string GroupKey(AuditAssessment a)
     {
         var o = a.Observation;
-        // Aggregate snapshots, not independently configurable values. Every source row is retained in Evidence.
-        if (o.RuleId == "windows.process.scheduling" && !IsGame(o) && Fact(o, "PriorityClass") != "RealTime")
-            return $"process:{o.Status}:{a.Classification}:{Fact(o, "PriorityClass")}";
-        if (o.RuleId is "windows.services.state" or "windows.tasks.entries" or "windows.startup.entries")
-            return $"overview:{o.RuleId}:{o.Status}:{a.Classification}";
-        if (o.RuleId is "network.statistics" or "storage.reliability")
-            return $"counters:{o.RuleId}:{o.Scope}:{o.InstanceId[..Math.Max(0, o.InstanceId.LastIndexOf(':'))]}";
         if (o.Facts.ContainsKey("registryView"))
         {
             var facts = string.Join("\n", o.Facts.Where(f => f.Key is not "registryView" and not "evidence")
@@ -70,26 +64,6 @@ public static class AuditPresentationBuilder
         var description = Description(o);
         var name = Name(o);
         var value = CurrentValue(o);
-        var aggregate = evidence.Count > 1 && (o.RuleId is "windows.process.scheduling" or "windows.services.state" or
-            "windows.tasks.entries" or "windows.startup.entries" or "network.statistics" or "storage.reliability");
-        if (aggregate)
-        {
-            name = o.RuleId switch
-            {
-                "windows.process.scheduling" => "Processos · " + PriorityName(Fact(o, "PriorityClass")),
-                "windows.services.state" => "Serviços do Windows",
-                "windows.tasks.entries" => "Tarefas agendadas",
-                "windows.startup.entries" => "Aplicativos de inicialização",
-                "network.statistics" => "Contadores da conexão",
-                _ => "Telemetria do SSD"
-            };
-            var available = evidence.Count(e => IsReadable(e.Observation));
-            value = available > 0 ? $"{available} leituras disponíveis" : "Não identificado";
-            description = o.RuleId is "network.statistics" or "storage.reliability"
-                ? Plain(o.Scope, description, 90) : description;
-            if (o.RuleId == "storage.reliability" && evidence.FirstOrDefault(e => e.Observation.Name == "Temperature" && IsReadable(e.Observation)) is { } temperature)
-                value = CurrentValue(temperature.Observation) + " · temperatura informada";
-        }
         return Finish(evidence, a, category, Subcategory(o), name, description, value,
             informational: o.RuleId.StartsWith("network.", StringComparison.Ordinal) &&
                 bool.TryParse(Fact(o, "HardwareInterface"), out var hardware) && !hardware);
@@ -125,46 +99,47 @@ public static class AuditPresentationBuilder
     private static AuditSettingPresentation Finish(IReadOnlyList<AuditAssessment> evidence, AuditAssessment a,
         string category, string subcategory, string name, string description, string current, bool informational = false)
     {
-        var available = evidence.Any(e => IsReadable(e.Observation));
-        var ignored = a.Rule.Support == AuditSupport.Ignored || a.Classification == AuditClassification.NoDocumentedEffect;
-        var comparison = available && !informational && !ignored && a.Classification == AuditClassification.ComparisonOpportunity;
-        var problem = available && !informational && !ignored && a.Classification == AuditClassification.DemonstratedProblem;
-        var possible = available && !informational && !ignored && a.Classification == AuditClassification.PossibleProblem;
-        var adequate = available && !informational && !ignored && a.Classification == AuditClassification.Adequate;
-        var unassessed = !available || (!ignored && !informational && a.Classification is AuditClassification.InsufficientData or AuditClassification.Unsupported or AuditClassification.AppliedUnproven);
-        // SpecificValue is intentionally not emitted: no current rule establishes a universal, compatible replacement.
-        var kind = !available ? AuditRecommendationKind.Unavailable : comparison ? AuditRecommendationKind.Compare :
-            adequate || ignored || informational ? AuditRecommendationKind.KeepCurrent : AuditRecommendationKind.NoUniversalValue;
-        var recommended = kind switch
+        var policy = AuditRecommendationClassifier.Classify(a);
+        if (informational)
+            policy = policy with { FunctionalKind = AuditFunctionalKind.Informational, Kind = AuditRecommendationKind.NoUniversalValue,
+                RecommendedValue = "Não aplicável", IsImprovement = false, IsAdequate = false, Priority = 5, TestId = null,
+                ShortReason = "Dispositivo virtual ou desabilitado não demonstra perda de desempenho.",
+                Reason = "Confirme se este dispositivo participa do cenário antes de investigar suas políticas." };
+        var available = evidence.Any(e => AuditRecommendationClassifier.Readable(e.Observation));
+        var improvement = available && policy.IsImprovement;
+        var comparison = improvement && policy.Kind == AuditRecommendationKind.Compare;
+        var adequate = available && policy.IsAdequate;
+        var unassessed = policy.FunctionalKind is AuditFunctionalKind.Incomplete or AuditFunctionalKind.Unsupported;
+        var status = policy.StatusLabel ?? (policy.FunctionalKind switch
         {
-            AuditRecommendationKind.Unavailable => "Não determinado",
-            AuditRecommendationKind.KeepCurrent => "Manter",
-            AuditRecommendationKind.Compare => "Vale comparar",
-            _ => possible || problem ? "Investigar antes de alterar" : "Depende de medição"
-        };
-        var status = !available ? "Não avaliado" : informational ? "Informativo" : ignored ? "Sem efeito documentado" :
-            problem ? "Problema demonstrado" : possible ? "Investigar" : comparison ? "Comparação opcional" : adequate ? "Sem alerta neste item" : "Efeito não verificado";
-        var tone = problem ? "problem" : possible || comparison ? "attention" : adequate ? "success" : "neutral";
-        var priority = problem ? 100 : possible ? 80 : comparison ? 50 : adequate ? 20 : ignored || informational ? 5 : 10;
-        var reason = !available ? AvailabilityReason(a.Observation) : informational
-            ? "Dispositivos virtuais ou desabilitados não demonstram perda de desempenho. Investigue apenas se este dispositivo for necessário ao cenário avaliado."
-            : Plain(a.Reason, "O valor foi preservado; consulte a evidência técnica para interpretar esta leitura.", 420);
-        var test = available && !ignored && !informational ? CompatibleTest(a, comparison || possible || problem) : null;
-        var validation = Validation(category, test);
-        var impact = ignored || informational || !available ? "Nenhum impacto no desempenho demonstrado." : Impact(category, a.Observation.RuleId);
+            AuditFunctionalKind.Informational => "Informativo",
+            AuditFunctionalKind.NoDocumentedEffect => "Sem efeito documentado",
+            AuditFunctionalKind.Unsupported => "Não suportado",
+            AuditFunctionalKind.Incomplete => "Não avaliado",
+            _ => comparison ? "Teste condicionado" : improvement ? "Investigar" : adequate ? "Manter justificado" : "Sem recomendação"
+        });
         var key = a.Observation.RuleId + ":" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
             string.Join("\n", evidence.Select(e => e.Observation.InstanceId).Order(StringComparer.Ordinal)))))[..16];
-        return new(key, category, subcategory, name, description, current, recommended, status, tone, kind,
-            problem || possible || comparison, comparison, adequate, unassessed, priority, reason, impact,
-            !available ? "Insuficiente" : a.Confidence switch { Confidence.High => "Alta", Confidence.Medium => "Média", _ => "Baixa" },
-            validation, Plain(a.Risks, "Mudanças externas podem afetar estabilidade; consulte os limites da leitura.", 260),
-            evidence, test, evidence.Select(TechnicalDetail).ToArray());
+        static string ConfidenceLabel(Confidence? confidence) => confidence switch
+            { Confidence.High => "Alta", Confidence.Medium => "Média", Confidence.Low => "Baixa", _ => "Dados insuficientes" };
+        var technical = new[]
+        {
+            $"Classificação funcional: {policy.FunctionalKind}",
+            $"Confiança da leitura: {ConfidenceLabel(policy.ReadingConfidence)}; interpretação: {ConfidenceLabel(policy.InterpretationConfidence)}; recomendação: {ConfidenceLabel(policy.RecommendationConfidence)}; benefício medido: {ConfidenceLabel(policy.BenefitConfidence)}.",
+            "Ler um valor com precisão não demonstra benefício ao alterá-lo."
+        }.Concat(evidence.Select(TechnicalDetail)).ToArray();
+        return new(key, category, subcategory, name, description, current,
+            Plain(policy.RecommendedValue, "Sem recomendação fundamentada", 100), status,
+            improvement ? "attention" : adequate ? "success" : "neutral", policy.Kind,
+            improvement, comparison, adequate, unassessed, policy.Priority,
+            Plain(policy.Reason, "Consulte a evidência técnica da leitura.", 520),
+            Plain(policy.PossibleImpact, "Benefício não demonstrado.", 320), ConfidenceLabel(policy.RecommendationConfidence),
+            Plain(policy.Validation, "Confira a fonte e o contexto antes de interpretar.", 420),
+            Plain(policy.Risks, "", 320), evidence, available ? policy.TestId : null, technical,
+            Plain(policy.ShortReason, "Sem regra técnica aplicável.", 170), policy.FunctionalKind);
     }
 
-    private static bool IsReadable(AuditObservation o) => o.Status == Availability.Available &&
-        Fact(o, "presence") != "absent" && (!string.IsNullOrWhiteSpace(o.RawValue) ||
-        o.RuleId == "devices.identity" && uint.TryParse(Fact(o, "pnpProblemCode"), NumberStyles.None,
-            CultureInfo.InvariantCulture, out _));
+    private static bool IsReadable(AuditObservation o) => AuditRecommendationClassifier.Readable(o);
     private static bool IsDevice(AuditAssessment a) => a.Rule.Id.StartsWith("devices.", StringComparison.Ordinal);
     private static string? Fact(AuditObservation o, string key) => o.Facts.GetValueOrDefault(key);
     private static int Severity(AuditAssessment a) => a.Classification switch
@@ -288,6 +263,13 @@ public static class AuditPresentationBuilder
     {
         if (!IsReadable(o)) return Fact(o, "presence") == "absent" ? "Sem valor explícito" : "Não identificado";
         var number = Fact(o, "decimal");
+        if (o.RuleId == "windows.scheduler.separation" && AuditRecommendationClassifier.Number(o) is { } separation)
+            return $"0x{separation:X} ({separation})";
+        if (o.RuleId == "network.advanced" && string.Equals(Fact(o, "RegistryKeyword"), "*IfType", StringComparison.OrdinalIgnoreCase))
+        {
+            var rawType = Fact(o, "RegistryValue")?.Trim('[', ']', ' ', '\"') ?? o.RawValue;
+            return rawType == "6" ? "6 · Ethernet" : Friendly(rawType ?? "Não identificado");
+        }
         if (o.RuleId == "windows.power.policy" && Fact(o, "ActiveScheme") is { } scheme)
             return scheme.ToLowerInvariant() switch
             {
@@ -297,7 +279,8 @@ public static class AuditPresentationBuilder
                 _ => "Plano personalizado"
             };
         if (o.RuleId == "windows.power.policy" && Fact(o, "unit") is { } unit) return Plain(o.RawValue + " " + unit, "Índice configurado", 90);
-        if (o.RuleId == "windows.process.scheduling") return "Prioridade " + PriorityName(Fact(o, "PriorityClass"));
+        if (o.RuleId == "windows.process.scheduling") return "Prioridade " + PriorityName(Fact(o, "PriorityClass")) +
+            (Fact(o, "AffinityMask") is { } affinity ? " · máscara " + affinity : "");
         if (o.RuleId == "devices.interrupt.msi") return number switch { "1" => "MSI permitido na configuração", "0" => "MSI não habilitado na configuração", _ => "Configuração MSI não interpretada" };
         if (o.RuleId == "devices.interrupt.affinity" && Fact(o, "logicalBits") is { } bits)
             return LogicalProcessors(bits, Fact(o, "groupContext"));
@@ -310,11 +293,11 @@ public static class AuditPresentationBuilder
             return capacity + (uint.TryParse(Fact(o, "ConfiguredTransferRateMTs"), out var speed) && speed > 0 ? $" · {speed} MT/s configurados" : "");
         }
         if (o.RuleId == "network.advanced" && Fact(o, "DisplayValue") is { } display && display != "não informado") return Friendly(display);
-        if (o.RuleId.StartsWith("nvidia.", StringComparison.Ordinal)) return Plain(HexSuffix.Replace(o.RawValue!, ""), "Valor disponível nos detalhes", 90);
+        if (o.RuleId.StartsWith("nvidia.", StringComparison.Ordinal)) return Plain(HexSuffix.Replace(o.RawValue!, ""), "Valor não decodificado", 90);
         if (o.RuleId is "windows.mouse.curves" or "windows.startup.entries" || Fact(o, "registryType") == "Binary") return "Configurado · detalhes disponíveis";
         if (number is not null) return Plain(number, "Valor numérico disponível", 90);
         var raw = o.RawValue!;
-        if (HexOnly.IsMatch(raw)) return "Valor disponível nos detalhes";
+        if (HexOnly.IsMatch(raw)) return "Valor não decodificado";
         return Friendly(raw);
     }
 
@@ -336,7 +319,7 @@ public static class AuditPresentationBuilder
     {
         "True" or "true" or "Enabled" or "Enable" => "Ativado", "False" or "false" or "Disabled" or "Disable" => "Desativado",
         "NotSupported" => "Não suportado", "NotConfigured" => "Sem configuração explícita", _ => value
-    }, "Valor disponível nos detalhes", 90);
+    }, "Valor não decodificado", 90);
     private static string Plain(string? value, string fallback, int maximum)
     {
         if (string.IsNullOrWhiteSpace(value) || Technical.IsMatch(value)) return fallback;

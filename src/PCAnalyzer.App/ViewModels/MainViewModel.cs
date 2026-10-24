@@ -83,7 +83,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private IReadOnlyList<MetricSample> _chartSamples = [];
     private IReadOnlyList<MetricSample> _overviewChartSamples = [];
     private string _processFilter = "";
-    private string _metricFilter = "", _sessionLabel = "Diagnóstico local", _workload = "Desktop em repouso / informar condição", _notes = "", _pingHost = "gateway", _processIdText = "";
+    private string _metricFilter = "", _sessionLabel = "Diagnóstico local", _workload = "", _notes = "", _pingHost = "gateway", _processIdText = "";
     private bool _anonymize = true;
 
     public MainViewModel(IApplicationBackend backend, Func<string, string, bool>? confirmation = null)
@@ -595,8 +595,19 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     }
     private async Task CaptureDpcAsync()
     {
-        if (!Confirm("Captura DPC / ISR de 30 segundos", "Será iniciada uma sessão ETW de kernel limitada a 30 s. A operação solicita elevação pelo Windows e pode adicionar overhead. Reproduza a condição que deseja investigar. O cancelamento encerra a sessão criada pelo aplicativo.\n\nIniciar captura agora?")) return;
-        await RunTestAsync("dpc", (progress, ct) => { progress.Report(new("Aguardando UAC / captura ETW de até 30 s")); return _backend.CaptureDpcAsync(ct); });
+        var seconds = LatencySeconds;
+        var context = $"{LatencyGoal}; carga informada: {Workload}. " +
+            (SelectedProcess is { } process ? $"Alvo informado: {process.Name}, PID {process.Id}. " : "Processo alvo não selecionado. ") +
+            "A captura ETW cobre o sistema inteiro; contexto informado não comprova atividade do jogo.";
+        if (!Confirm($"Captura DPC / ISR de {seconds} segundos",
+            $"Será iniciada uma sessão ETW de kernel limitada a {seconds} s. O Windows solicita elevação e a coleta pode adicionar custo. " +
+            context + "\n\nReproduza a condição que deseja investigar. Cancelar encerra a sessão criada pelo aplicativo.\n\nIniciar captura agora?")) return;
+        await RunTestAsync("dpc", async (progress, ct) =>
+        {
+            progress.Report(new($"Aguardando UAC / captura ETW de até {seconds} s"));
+            var result = await _backend.CaptureDpcAsync(seconds, string.IsNullOrWhiteSpace(Workload) ? null : context, ct);
+            return result with { SelectionContext = context };
+        });
     }
     private async Task LabAsync(string test)
     {

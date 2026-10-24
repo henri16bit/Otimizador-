@@ -85,6 +85,10 @@ public sealed class DeviceInterruptAuditProvider : IPerformanceAuditProvider
                     driver[field] = read.Status != Availability.Available ? read.Detail ?? read.Status.ToString() :
                         read.Present ? Raw(read) : "Não exposto";
                 }
+            foreach (var fact in DriverImageFacts(device.Service, ValidServiceName(device.Service)
+                ? ReadRegistry(registry, @"SYSTEM\CurrentControlSet\Services\" + device.Service, "ImagePath")
+                : new(false, null, null, Availability.InsufficientData)))
+                driver[fact.Key] = fact.Value;
             observations.Add(IdentityObservation(device, driver));
             var isPci = device.InstanceId.StartsWith("PCI\\", StringComparison.OrdinalIgnoreCase);
             // PCI capability and interrupt registry audit apply to the PCI controllers/devices, not every HID child.
@@ -129,8 +133,38 @@ public sealed class DeviceInterruptAuditProvider : IPerformanceAuditProvider
         foreach (var field in driver) facts[field.Key] = field.Value;
         facts["effective"] = "Dispositivo presente na enumeração PnP; serviço e identidade consultados nesta captura.";
         return new("devices.identity", device.InstanceId, device.Name, device.Class, device.Service, Availability.Available,
-            "SetupAPI DIGCF_PRESENT + Configuration Manager + chave de classe do driver", facts,
+            "SetupAPI DIGCF_PRESENT + Configuration Manager + chaves de classe e serviço do driver", facts,
             device.Limitations.Count > 0 ? string.Join(" ", device.Limitations) : null);
+    }
+
+    [UnconditionalSuppressMessage("Interoperability", "CA1416", Justification = "RegistryValueKind constants only describe the supplied read result.")]
+    internal static IReadOnlyDictionary<string, string> DriverImageFacts(string service, DeviceRegistryValue image)
+    {
+        var facts = new Dictionary<string, string>();
+        if (!ValidServiceName(service))
+        {
+            facts["driverImagePathStatus"] = Availability.InsufficientData.ToString();
+            facts["driverImagePathDetail"] = "Nome do serviço indisponível ou inválido; nenhum caminho de driver foi inferido.";
+            return facts;
+        }
+        facts["driverImagePathSource"] = @"HKLM\SYSTEM\CurrentControlSet\Services\" + service + @"\ImagePath";
+        facts["driverImagePathStatus"] = image.Status.ToString();
+        facts["driverImagePathPresence"] = image.Status != Availability.Available ? "unknown" : image.Present ? "present" : "absent";
+        if (image.Detail is not null) facts["driverImagePathDetail"] = image.Detail;
+        if (image.Status != Availability.Available || !image.Present) return facts;
+        if (image.Kind is { } kind) facts["driverImagePathRegistryType"] = kind.ToString();
+        if (image.Kind is RegistryValueKind.String or RegistryValueKind.ExpandString && image.Value is string path && !string.IsNullOrWhiteSpace(path))
+        {
+            // Preserve the read value; service names and conventional system directories are not binary identities.
+            facts["driverImagePath"] = path;
+            facts["driverImagePathDetail"] = "ImagePath lido sem expandir variáveis; registro do serviço não comprova qual binário estava carregado durante o trace.";
+        }
+        else
+        {
+            facts["driverImagePathStatus"] = Availability.InsufficientData.ToString();
+            facts["driverImagePathDetail"] = "ImagePath vazio ou com tipo incompatível; nenhum caminho de driver foi inferido.";
+        }
+        return facts;
     }
 
     internal static AuditObservation CapabilityObservation(AuditPnpDevice device, DevicePropertyRead support, DevicePropertyRead maximum)
@@ -299,6 +333,8 @@ public sealed class DeviceInterruptAuditProvider : IPerformanceAuditProvider
         var parts = path.Split('\\');
         return parts.Length == 2 && Guid.TryParse(parts[0], out _) && parts[1].Length == 4 && parts[1].All(char.IsAsciiDigit);
     }
+    private static bool ValidServiceName(string service) => !string.IsNullOrWhiteSpace(service) &&
+        service.Length <= 256 && !service.Any(c => c is '\\' or '/' || char.IsControl(c));
     private static bool IsUsbRelated(AuditPnpDevice device) => device.InstanceId.StartsWith("USB\\", StringComparison.OrdinalIgnoreCase) ||
         device.InstanceId.StartsWith("HID\\", StringComparison.OrdinalIgnoreCase) || device.Class.Equals("USB", StringComparison.OrdinalIgnoreCase);
     [UnconditionalSuppressMessage("Interoperability", "CA1416", Justification = "Pure data decoding: RegistryValueKind constants do not access the Windows registry.")]

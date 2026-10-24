@@ -1,27 +1,28 @@
-# PC Performance Analyzer v0.6.0-preview.5
+# PC Performance Analyzer v0.7.0-preview.1
 
-**ANALISAR MEU PC → escolher uma categoria → comparar atual e recomendação → abrir a explicação → medir quando necessário.** A auditoria existente ganha uma interface compacta, com dados reais e sem alterações nas configurações do computador.
+**Valor atual → recomendação fundamentada → motivo curto → investigação manual quando necessária.** Esta versão evolui o motor de recomendações e a interpretação das medições, preservando as categorias e a auditoria sem aplicação de ajustes.
 
-- Dez destinos no menu: Início, Windows, NVIDIA, Rede, MSI / IRQ / USB, Latência, Hardware, Jogos, Recomendações e Avançado.
-- Início com uma ação principal, resumo na própria tela e até cinco pontos priorizados. A análise padrão não exige confirmação extra; operações com tráfego, captura ou carga continuam manuais e confirmadas.
-- Listas de configurações com valor atual, recomendação e status; busca por nome, grupos, cinco filtros e ordenação. A virtualização evita criar simultaneamente todas as linhas de listas extensas.
-- Janela de detalhes com justificativa, impacto possível, confiança, riscos e teste compatível. Valores brutos, Registro, GUIDs e evidências completas ficam em uma seção recolhida. Fechar a janela preserva a categoria e seus filtros.
-- Recomendações distinguem manter, comparar e depender de medição. Não há valor ideal inventado. Dispositivos virtuais, código PnP 22 e campos documentados como ignorados deixam de ocupar o destaque de melhorias sem evidência relevante.
-- Rede distingue falta de permissão, comando ausente, consulta não suportada e falha de leitura. Valores vazios e funções de energia não suportadas não aparecem como medições bem-sucedidas. A identificação por GUID mantém a proteção contra associar dados ao adaptador errado.
-- Resultados de rede, memória, armazenamento e jogos aparecem na seção correspondente, com estado, unidades e detalhes recolhidos. Latência separa DPC/ISR, frametime, RTT e acesso à memória; não calcula input lag total.
-- Histórico, exportações, comparações, coletores, importações ETL/CSV, captura manual e ferramentas avançadas foram preservados. Aplicação e restauração de ajustes continuam bloqueadas na interface, API e auxiliar.
-- Corrigidos contraste do botão principal e dos textos da explicação, aplicação da fonte da janela, preservação do relatório de auditoria após testes manuais e atualização do estado de leitura da rede. A análise pelo Início permanece passiva mesmo quando opções de testes foram marcadas anteriormente em Avançado.
+- Cada propriedade recebe uma classificação funcional antes de gerar uma recomendação. Informações de identificação, recursos sem suporte, leituras incompletas e propriedades desconhecidas deixam de virar oportunidades apenas por estarem presentes. Sem regra aplicável, a interface informa **Sem recomendação fundamentada**.
+- As listas mostram o valor detectado e um motivo curto. `*IfType = 6` aparece como Ethernet, Win32PrioritySeparation preserva hexadecimal e decimal, e cada processo mantém sua identidade, prioridade e afinidade observadas.
+- As recomendações passam a considerar o contexto: 2933 MT/s só recebe a explicação específica de i7-10700K/B460 quando CPU e placa foram identificadas; moderação de interrupções considera o custo de CPU; perfis NVIDIA distinguem global, aplicação e herança. Não há recomendação universal de prioridade, afinidade ou potência máxima.
+- A janela de detalhes mostra justificativa, impacto possível, confiança da recomendação e validação. Evidências e riscos ficam recolhidos; a navegação técnica usa páginas de até 20 entradas, com uma rolagem principal e ações no rodapé.
+- **ANALISAR MEU PC** primeiro conclui as leituras de inventário, respeitando falhas e limites de cada fonte, e depois inicia a janela de observação passiva. O tempo selecionado não limita artificialmente todo o inventário. Cancelamento e coleta parcial preservam somente as evidências obtidas.
+- **INVESTIGAR DESEMPENHO** leva aos testes manuais. DPC/ISR permite 30, 60 ou 120 segundos, com objetivo, contexto e confirmação. Navegar até um teste não inicia uma captura.
+- DPC/ISR passa a apresentar conclusão e próximo passo a partir de duração, contagens, perdas, distribuição, recorrência e contexto. Máximo, média, p95 e p99 continuam separados. Um pico de 1 ms não é tratado como defeito universal; uma captura curta não comprova baixo input lag.
+- A associação entre módulos ETW e dispositivos usa identidades disponíveis do driver. Caminhos conflitantes, binários compartilhados, nomes candidatos e inventários antigos ficam explícitos. MSI, afinidade e distribuição por CPU não demonstram causalidade por si só.
+- O Início reúne cobertura, até cinco prioridades entre configurações e achados de medições, itens adequados e últimas medições válidas com data e contexto. Uma tentativa posterior com falha não apaga a última medição válida.
+- Resultados, interpretação e próximo passo aparecem na categoria do teste. Abrir e exportar selecionam o resultado daquela categoria. Os novos campos são persistidos no histórico e incluídos nas exportações, com anonimização e escape HTML; registros antigos continuam legíveis.
 
-Baixe **PCAnalyzer-windows-x64.zip** em **Assets**. Os arquivos “Source code” contêm apenas código-fonte.
+A publicação exige testes de lógica, cenários WPF, verificação passiva no Windows e abertura do executável empacotado. Evidências e limites estão em [VALIDATION.md](https://github.com/henri16bit/Otimizador-/blob/main/docs/VALIDATION.md); o mapeamento dos 20 requisitos de regressão está em [RECOMMENDATION-ENGINE.md](https://github.com/henri16bit/Otimizador-/blob/main/docs/RECOMMENDATION-ENGINE.md).
+
+Baixe o executável no arquivo **PCAnalyzer-windows-x64.zip**, em **Assets** da release. “Source code” contém apenas código-fonte.
 
 1. Extraia o ZIP completo para uma pasta nova e gravável.
 2. Abra **PCAnalyzer.exe** como usuário normal, mantendo DLLs e subpastas junto dele.
-3. Clique em **ANALISAR MEU PC** e consulte as categorias.
+3. Use **ANALISAR MEU PC** para a análise passiva e escolha uma investigação quando houver um objetivo concreto.
 
-O pacote portátil inclui o runtime .NET; não exige instalação separada. O auxiliar solicita UAC para a captura DPC/ISR autorizada. Nenhuma configuração operacional é alterada.
+O pacote portátil inclui o runtime .NET. A captura DPC/ISR autorizada pode solicitar UAC pelo auxiliar. Aplicação e restauração de ajustes permanecem bloqueadas.
 
-A publicação exige compilação sem avisos, testes de lógica, empacotamento, cenários WPF e verificação passiva no runner Windows. Os resultados efetivamente obtidos ficam em `docs/VALIDATION.md`; a existência dessas verificações não equivale à validação do computador alvo.
+Ainda é necessário validar os dispositivos e cenários do computador alvo com Windows 10 Pro 22H2: NVIDIA, Intel I219-V, NVMe, ETW/PresentMon, Vanguard e escala real em 125% e 150%. O runner Windows e as fixtures não substituem essa validação. Benefício de desempenho não foi medido; a classificação de anomalia fundamentada em DPC/ISR permanece reservada enquanto não houver referência aplicável ou evidência independente. A ferramenta não mede input lag físico.
 
-Permanecem necessárias as verificações no Windows 10 Pro 22H2 do usuário: NVIDIA, Intel I219-V, NVMe, ETW/PresentMon, Vanguard e escala real do Windows em 125% e 150%. Layout automatizado e dados de teste não comprovam funcionamento desses dispositivos nem ganhos em jogos. Leituras sem suporte, SPD/timings/canais, input lag físico e outros limites estão em `docs/AUDIT-EXPERIENCE.md` e `docs/PERFORMANCE-CONSULTANCY.md`.
-
-O executável ainda não é assinado. Se a abertura falhar, consulte `%LOCALAPPDATA%\PCAnalyzer\logs\startup-last-error.txt`. Confira o download com `Get-FileHash .\PCAnalyzer-windows-x64.zip -Algorithm SHA256` e compare com o arquivo `.sha256`.
+O executável ainda não é assinado. Se a abertura falhar, consulte `%LOCALAPPDATA%\PCAnalyzer\logs\startup-last-error.txt`. Confira o download com `Get-FileHash .\PCAnalyzer-windows-x64.zip -Algorithm SHA256` e compare com o arquivo `.sha256` publicado.

@@ -27,12 +27,14 @@ public sealed partial class MainViewModel
     public string SelectedAuditSubcategory { get => _auditSubcategory; set { if (value is not null && Set(ref _auditSubcategory, value)) FilterAuditSettings(); } }
     public string AuditSort { get => _auditSort; set { if (value is not null && AuditSortOptions.Contains(value) && Set(ref _auditSort, value)) FilterAuditSettings(); } }
     public bool HasAuditSettings => _auditSettings.Count > 0;
-    public bool HasHomeResult => HasInlineResult || HasAuditSettings;
-    public string HomeAuditState => HasAuditSettings && _auditSettingsRun is { } run ? "Auditoria · " + TestLabels.Status(run.Status).ToLowerInvariant() : SimpleReportState;
+    public bool HasHomeResult => HasInlineResult || HasAuditSettings || HomeMeasurementConclusions.Count > 0;
+    public string HomeAuditState => HasAuditSettings && _auditSettingsRun is { } run ? "Auditoria · " + TestLabels.Status(run.Status).ToLowerInvariant() :
+        HomeMeasurementConclusions.Count > 0 ? "Medições para investigar" : SimpleReportState;
     public bool HasPriorityAuditSettings => PriorityAuditSettings.Count > 0;
-    public string PriorityAuditSummary => !HasAuditSettings ? "Analise o PC para receber orientações baseadas nas leituras." :
+    public string PriorityAuditSummary => HomeMeasurementConclusions.Count > 0 ? "Há medições com sinais para investigar. Confira o contexto antes de atribuir a causa a uma configuração." : !HasAuditSettings ? "Analise o PC para receber orientações baseadas nas leituras." :
         HasPriorityAuditSettings ? "Pontos que merecem investigação. Nenhuma mudança será aplicada." : "Nenhuma melhoria tem evidência suficiente nesta análise.";
-    public string HomeAuditSummary => !HasAuditSettings ? _openedTest?.Status == TestStatus.Failed ? "A análise não pôde ser concluída. Consulte os detalhes da leitura." : SimpleReportSummary :
+    public string HomeAuditSummary => !HasAuditSettings ? HomeMeasurementConclusions.Count > 0 ? "Conclusões das últimas medições válidas, com data e contexto próprios." :
+        _openedTest?.Status == TestStatus.Failed ? "A análise não pôde ser concluída. Consulte os detalhes da leitura." : SimpleReportSummary :
         "Configurações organizadas por categoria. Confira o valor atual, a orientação e as evidências de cada item.";
     public string AuditSettingsSummary => !HasAuditSettings ? "As configurações aparecerão após a análise do PC." :
         $"{FilteredAuditSettings.Count} configurações neste filtro · leitura de {_settingsCapturedAt?.LocalDateTime:dd/MM HH:mm}.";
@@ -58,6 +60,8 @@ public sealed partial class MainViewModel
 
     private void InitializeExperienceCommands()
     {
+        InvestigatePerformanceCommand = new RelayCommand(() => Navigate("latency"));
+        ChooseMeasurementCommand = new RelayCommand(value => Navigate(value is "frames" ? "games" : value is "ping" ? "network" : value is "memory-access" ? "hardware" : "latency"));
         OpenAuditSettingCommand = new RelayCommand(value =>
         {
             if (value is not AuditSettingPresentation setting) return;
@@ -111,15 +115,12 @@ public sealed partial class MainViewModel
         _auditSettings = AuditPresentationBuilder.Build(report);
         _settingsCapturedAt = report.CapturedAt;
         RefreshAdapterVisibility();
-        Replace(PriorityAuditSettings, _auditSettings.Where(r => r.IsImprovement).OrderByDescending(r => r.Priority).Take(5));
-        Replace(RecommendedTests, _auditSettings.Where(r => r.IsImprovement && r.TestId is not null)
-            .DistinctBy(r => r.TestId).Take(3).Select(r => new RecommendationRow(r.Name,
-                r.Validation, "Escolher teste", new SuggestedNextAction("audit-test:" + r.TestId, "Escolher teste", TestDestination(r.TestId!), r.Reason))));
+        RefreshHomePriorities();
         RefreshCategoryGroups(); FilterAuditSettings(); NotifyAuditExperience();
     }
 
     private static string TestDestination(string id) => id switch
-    { "ping" => "network", "dpc" => "latency", "frames" => "games", _ => "hardware" };
+    { "ping" => "network", "dpc" or "etl-import" => "latency", "frames" or "frames-import" or "gaming-analysis" => "games", _ => "hardware" };
 
     private void ResetAuditSettings()
     {
@@ -131,6 +132,7 @@ public sealed partial class MainViewModel
     {
         foreach (var name in new[] { nameof(HasAuditSettings), nameof(HasHomeResult), nameof(HomeAuditState), nameof(HasPriorityAuditSettings), nameof(PriorityAuditSummary), nameof(HomeAuditSummary), nameof(AuditSettingsSummary) }) Notify(name);
         ExportAuditCommand?.Refresh(); OpenAuditReportCommand?.Refresh();
+        NotifyConsultation();
     }
     private void SaveCategoryFilters()
     {
@@ -187,7 +189,7 @@ public sealed partial class MainViewModel
         "devices" => id is "dpc" or "etl-import",
         "games" => id is "frames" or "frames-import" or "gaming-analysis",
         "hardware" => id is "cpu" or "ram" or "memory-access" or "disk-read",
-        "latency" => id is "ping" or "dpc" or "etl-import" or "frames" or "frames-import" or "memory-access",
+        "latency" => id is "ping" or "dpc" or "etl-import" or "frames" or "frames-import" or "gaming-analysis" or "memory-access" or "cpu" or "ram" or "disk-read",
         _ => false
     };
     private TestSession? CategoryTest => _categoryTests.Values.Where(r => TestBelongsTo(r.TestId, SelectedSection?.Id)).OrderByDescending(r => r.StartedAt).FirstOrDefault();
@@ -200,7 +202,7 @@ public sealed partial class MainViewModel
     public string CategoryTestSummary => CategoryTest is not { } run ? "Inicie um teste manual para medir o comportamento." :
         run.Status == TestStatus.Failed ? "Não foi possível concluir a leitura. Consulte os detalhes e repita quando a fonte estiver disponível." :
         run.Status == TestStatus.Cancelled ? "Teste cancelado. Somente as medições obtidas nesta execução foram preservadas." :
-        run.TestId switch
+        run.Result?.Interpretation ?? run.Result?.Findings?.FirstOrDefault()?.Explanation ?? (run.TestId switch
         {
             "ping" => "Resposta do destino medido. Perdas ICMP não comprovam perda no jogo; compare sessões no mesmo destino.",
             "dpc" or "etl-import" => "Durações de execução no kernel. Picos isolados não medem input lag físico nem comprovam defeito.",
@@ -208,7 +210,10 @@ public sealed partial class MainViewModel
             "memory-access" or "ram" => "Acesso à memória do processo. CPU, caches e agendamento influenciam o resultado; não é latência DRAM isolada.",
             "disk-read" => "Leitura do arquivo selecionado. O cache do Windows pode influenciar a taxa; isso não comprova a saúde física do SSD.",
             _ => "Medição da carga escolhida, salva no histórico. Compare repetições sob condições equivalentes."
-        };
+        });
+    public string CategoryInterpretationStatus => CategoryTest?.Result?.InterpretationStatus ?? "Interpretação da janela";
+    public string CategoryNextStep => CategoryTest?.Result?.NextStep ?? CategoryTest?.Result?.Findings?.FirstOrDefault()?.Recommendation ??
+        "Compare repetições sob a mesma carga antes de atribuir uma diferença à configuração.";
     public IEnumerable<IndicatorRow> CategoryTestIndicators => (CategoryTest?.Result?.Indicators ?? []).Select(i => new IndicatorRow(i));
     public IEnumerable<string> CategoryTestLimitations => CategoryTest?.Result?.Limitations ?? [];
     public string CategoryTestDetails => string.Join(Environment.NewLine, new[] { CategoryTest?.Error }.Concat(CategoryTest?.Result?.Lines ?? []).Where(s => s is not null));
@@ -238,12 +243,13 @@ public sealed partial class MainViewModel
     private void RememberCategoryResult(TestSession run)
     {
         if (!_categoryTests.TryGetValue(run.TestId, out var previous) || previous.StartedAt <= run.StartedAt) _categoryTests[run.TestId] = run;
+        RememberValidMeasurement(run);
         RefreshCategoryResult();
     }
     private void RefreshCategoryResult()
     {
         SelectedCategorySeries = CategoryResultSeries.FirstOrDefault();
-        foreach (var name in new[] { nameof(HasCategoryTestResult), nameof(CategoryTestId), nameof(CategoryResultContext), nameof(CategoryTestTitle), nameof(CategoryResultState), nameof(CategoryTestSummary),
+        foreach (var name in new[] { nameof(HasCategoryTestResult), nameof(CategoryTestId), nameof(CategoryResultContext), nameof(CategoryTestTitle), nameof(CategoryResultState), nameof(CategoryTestSummary), nameof(CategoryInterpretationStatus), nameof(CategoryNextStep),
             nameof(CategoryTestIndicators), nameof(CategoryTestLimitations), nameof(CategoryTestDetails), nameof(CategoryHasGraph), nameof(CategoryResultSeries), nameof(CategoryMeasurements) }) Notify(name);
         ExportCategoryTestCommand?.Refresh();
         OpenCategoryTestCommand?.Refresh();
