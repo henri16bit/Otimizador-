@@ -1,0 +1,433 @@
+{
+  "tag": "v0.7.0-preview.2",
+  "timestamp": "2026-10-25T16:19:00.7805342+00:00",
+  "runUrl": "https://github.com/henri16bit/Otimizador-/actions/runs/40210826335",
+  "steps": {
+    "checkout": "success",
+    "packaging_tests": "success",
+    "release_tests": "success",
+    "network_tests": "success",
+    "restore": "success",
+    "build": "success",
+    "tests": "success",
+    "ui_flows": "success",
+    "hardware": "success",
+    "package": "success",
+    "smoke": "success",
+    "publish": "success",
+    "test_archive": "success",
+    "startup_archive": "success"
+  },
+  "startup": {
+    "success": true,
+    "views": 11,
+    "detailViews": 7,
+    "categoryViews": 10,
+    "compactLayoutChecked": true,
+    "passiveHardwareStarted": false,
+    "timestamp": "2026-10-25T16:18:46.7346721+00:00"
+  },
+  "uiFlows": {
+    "success": true,
+    "checks": [
+      "readable selection labels",
+      "interrupted execution recovery",
+      "dashboard progress",
+      "navigation during run",
+      "no forced navigation",
+      "cancel",
+      "failure",
+      "reopen stored result",
+      "network read and unavailable property",
+      "missing sensors",
+      "collection before inventory",
+      "ten category navigation entries",
+      "structured general report",
+      "missing GPU is inconclusive",
+      "report history reopen",
+      "failure clears old report",
+      "imports do not change live readings",
+      "no WPF binding errors",
+      "offscreen WPF layouts at 1366x768 and 1920x1080",
+      "gaming opt-in commands",
+      "failed analysis remains latest attempt",
+      "selected finding remains in its module",
+      "general result on same page",
+      "audit command and same-page coverage",
+      "audit SQLite history reopen",
+      "read-only consultation without apply controls",
+      "audit cancellation and failure clear stale conclusions",
+      "audit partial state and export",
+      "cancelled audit retains only newly collected evidence",
+      "audit layouts at requested viewports",
+      "memory access test is discoverable and manual",
+      "category filters search and ordering",
+      "large audit list virtualizes containers",
+      "compact rows hide technical identities",
+      "detail modal closes with keyboard and preserves context",
+      "priority recommendations exclude disabled and ignored entries",
+      "manual network result remains in its category and preserves audit",
+      "simulated 100 125 and 150 percent layouts",
+      "one-click passive analysis needs no confirmation",
+      "rendered setting and modal values meet contrast checks",
+      "visual captures preserve the complete viewport despite layout offsets",
+      "short reasons explain compact recommendations",
+      "single-scroll modal pages technical evidence with stable footer and keyboard focus",
+      "unknown properties never become optimization opportunities",
+      "manual DPC duration and context reach confirmation and backend",
+      "declined DPC confirmation does not capture",
+      "last valid measurements survive failed attempts",
+      "history restores older valid measurement after incomplete result",
+      "category export and open commands select their own result",
+      "measurement navigation never starts a test",
+      "loss-only ping preserves the last valid RTT and jitter",
+      "measurement recommendation opens its original persisted session",
+      "imported ETL description does not invent workload context"
+    ],
+    "fixtureDataOnly": true,
+    "hardwareOrConfigurationChanged": false
+  },
+  "hardware": {
+    "schemaVersion": 3,
+    "sessionId": "a01dbf8b-5280-44b7-b93a-fc4a0f5bc270",
+    "capturedAtUtc": "2026-10-25T16:17:53.9166743+00:00",
+    "platform": "Windows",
+    "requiredMetricsAvailable": true,
+    "requiredAuditChecksPassed": true,
+    "audit": {
+      "passed": true,
+      "savedAssessmentCount": 718,
+      "exactSqliteRoundTrip": true,
+      "anonymousJsonMatchesSavedSession": true,
+      "anonymousHtmlMatchesSavedSession": true,
+      "assessmentMetadataPreserved": true,
+      "nvidiaSettingsRead": false,
+      "providers": [
+        {
+          "provider": "WindowsConfigurationAuditProvider",
+          "required": true,
+          "observations": 506,
+          "available": 487,
+          "statusCounts": {
+            "Available": 487,
+            "PermissionRequired": 15,
+            "InsufficientData": 4
+          }
+        },
+        {
+          "provider": "DeviceInterruptAuditProvider",
+          "required": true,
+          "observations": 20,
+          "available": 18,
+          "statusCounts": {
+            "Available": 18,
+            "Unsupported": 2
+          }
+        },
+        {
+          "provider": "NetworkConfigurationAuditProvider",
+          "required": true,
+          "observations": 161,
+          "available": 95,
+          "statusCounts": {
+            "ReadError": 35,
+            "Available": 95,
+            "Unsupported": 31
+          }
+        },
+        {
+          "provider": "StorageMemoryAuditProvider",
+          "required": true,
+          "observations": 8,
+          "available": 6,
+          "statusCounts": {
+            "Available": 6,
+            "InsufficientData": 2
+          }
+        },
+        {
+          "provider": "NvidiaDriverAuditProvider",
+          "required": false,
+          "observations": 23,
+          "available": 0,
+          "statusCounts": {
+            "InsufficientData": 2,
+            "ToolMissing": 21
+          }
+        }
+      ],
+      "checks": [
+        {
+          "description": "Interpretação: 284 leituras informativas ou sem efeito documentado não viram otimizações",
+          "passed": true
+        },
+        {
+          "description": "Interpretação: 144 leituras ausentes ou indisponíveis não recomendam alteração nem alegam benefício",
+          "passed": true
+        },
+        {
+          "description": "Apresentação: itens informativos, sem efeito documentado ou indisponíveis ficam fora das melhorias",
+          "passed": true
+        },
+        {
+          "description": "WindowsConfigurationAuditProvider: ao menos uma observação realmente disponível",
+          "passed": true
+        },
+        {
+          "description": "DeviceInterruptAuditProvider: ao menos uma observação realmente disponível",
+          "passed": true
+        },
+        {
+          "description": "NetworkConfigurationAuditProvider: ao menos uma observação realmente disponível",
+          "passed": true
+        },
+        {
+          "description": "StorageMemoryAuditProvider: ao menos uma observação realmente disponível",
+          "passed": true
+        },
+        {
+          "description": "Registro Registry32: ProductName coincide com leitura HKLM independente, presente e REG_SZ",
+          "passed": true
+        },
+        {
+          "description": "Registro Registry32: CurrentBuildNumber coincide com leitura HKLM independente, presente e REG_SZ",
+          "passed": true
+        },
+        {
+          "description": "Registro Registry64: ProductName coincide com leitura HKLM independente, presente e REG_SZ",
+          "passed": true
+        },
+        {
+          "description": "Registro Registry64: CurrentBuildNumber coincide com leitura HKLM independente, presente e REG_SZ",
+          "passed": true
+        },
+        {
+          "description": "Agendamento: valor apresentado em hexadecimal/decimal coincide com DWORD real lido independentemente",
+          "passed": true
+        },
+        {
+          "description": "Agendamento: DWORD observado não recebe substituto universal nem ganho presumido",
+          "passed": true
+        },
+        {
+          "description": "Processo próprio: classe de prioridade disponível e igual à leitura direta",
+          "passed": true
+        },
+        {
+          "description": "Processo próprio: máscara de afinidade disponível e igual à leitura direta",
+          "passed": true
+        },
+        {
+          "description": "Processo próprio: linha individual apresenta prioridade e afinidade reais, sem agregar outros executáveis",
+          "passed": true
+        },
+        {
+          "description": "Topologia: processadores lógicos positivos e iguais a GetActiveProcessorCount em todos os grupos",
+          "passed": true
+        },
+        {
+          "description": "PnP: ao menos um dispositivo presente com identidade e fonte disponíveis",
+          "passed": true
+        }
+      ],
+      "examples": [
+        {
+          "ruleId": "windows.version",
+          "current": "Windows Server 2025 Datacenter",
+          "recommended": "Não aplicável",
+          "shortReason": "A versão identifica quais contratos do Windows podem ser aplicáveis.",
+          "functionalKind": "Informational"
+        },
+        {
+          "ruleId": "windows.version",
+          "current": "26100",
+          "recommended": "Não aplicável",
+          "shortReason": "A versão identifica quais contratos do Windows podem ser aplicáveis.",
+          "functionalKind": "Informational"
+        },
+        {
+          "ruleId": "windows.scheduler.separation",
+          "current": "0x2 (2)",
+          "recommended": "Manter",
+          "shortReason": "Outra política de agendamento não demonstrou menor latência neste computador.",
+          "functionalKind": "Adjustable"
+        },
+        {
+          "ruleId": "windows.process.scheduling",
+          "current": "Prioridade abaixo do normal · máscara 0xF",
+          "recommended": "Manter",
+          "shortReason": "A classe observada não sustenta elevar a prioridade ou restringir a afinidade.",
+          "functionalKind": "Adjustable"
+        },
+        {
+          "ruleId": "memory.modules",
+          "current": "1 GiB",
+          "recommended": "Sem recomendação fundamentada",
+          "shortReason": "A taxa configurada do módulo não foi obtida; a identidade ou capacidade não substitui a leitura de MT/s.",
+          "functionalKind": "Incomplete"
+        }
+      ],
+      "scope": "Leituras reais no Windows, confronto de Registro/processo/topologia com APIs independentes, classificação e apresentação de valores observados, SQLite exato e exportação anônima. Não valida ganho, aplicação efetiva de tweaks, precisão de sensores, GPU ausente, interrupções em carga ou o PC do usuário."
+    },
+    "nvidiaGpuTelemetryRequired": false,
+    "sampleBatches": 3,
+    "evaluatedBatches": [
+      2,
+      3
+    ],
+    "maximumBatches": 6,
+    "ownProcessSamples": [
+      {
+        "batch": 1,
+        "timestamp": "2026-10-25T16:17:24.0011842+00:00",
+        "uniqueOwnPidPresent": true,
+        "workingSetBytes": 46088192,
+        "cpuPercent": null,
+        "limitation": "CPU requer duas amostras com o mesmo PID e instante de criação; não há valor zero presumido."
+      },
+      {
+        "batch": 2,
+        "timestamp": "2026-10-25T16:17:26.0789937+00:00",
+        "uniqueOwnPidPresent": true,
+        "workingSetBytes": 79310848,
+        "cpuPercent": 8.459960721959002,
+        "limitation": "CPU normalizada pelos processadores lógicos ativos; working set inclui páginas compartilhadas."
+      },
+      {
+        "batch": 3,
+        "timestamp": "2026-10-25T16:17:28.1023733+00:00",
+        "uniqueOwnPidPresent": true,
+        "workingSetBytes": 81346560,
+        "cpuPercent": 1.544457874775553,
+        "limitation": "CPU normalizada pelos processadores lógicos ativos; working set inclui páginas compartilhadas."
+      }
+    ],
+    "savedMetricCount": 377,
+    "exactSqliteRoundTrip": true,
+    "jsonNumericAndMetadataPreserved": true,
+    "csvMatchesJsonLeaves": true,
+    "htmlMatchesSavedSessionExport": true,
+    "referenceHardwareAccuracyValidated": false,
+    "wpfEtwPresentMonOrOptimizationValidated": false,
+    "checks": [
+      {
+        "description": "Ao menos três lotes passivos coletados; primeiro reservado para estabelecer deltas",
+        "passed": true
+      },
+      {
+        "description": "Lote 2: processo próprio com PID único, nome e timestamp do lote",
+        "passed": true
+      },
+      {
+        "description": "Lote 2: working set do processo próprio disponível e positivo",
+        "passed": true
+      },
+      {
+        "description": "Lote 2: CPU do processo próprio disponível e entre 0 e 100% após duas amostras",
+        "passed": true
+      },
+      {
+        "description": "Lote 2: cpu.total.percent disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 2: memory.total.bytes disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 2: memory.available.bytes disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 2: memory.commit.bytes disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 2: memory.commit.limit.bytes disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 2: RAM disponível ≤ RAM física; commit ≤ limite de commit",
+        "passed": true
+      },
+      {
+        "description": "Lote 3: processo próprio com PID único, nome e timestamp do lote",
+        "passed": true
+      },
+      {
+        "description": "Lote 3: working set do processo próprio disponível e positivo",
+        "passed": true
+      },
+      {
+        "description": "Lote 3: CPU do processo próprio disponível e entre 0 e 100% após duas amostras",
+        "passed": true
+      },
+      {
+        "description": "Lote 3: cpu.total.percent disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 3: memory.total.bytes disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 3: memory.available.bytes disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 3: memory.commit.bytes disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 3: memory.commit.limit.bytes disponível, finito e com metadados de origem (Available)",
+        "passed": true
+      },
+      {
+        "description": "Lote 3: RAM disponível ≤ RAM física; commit ≤ limite de commit",
+        "passed": true
+      }
+    ],
+    "scope": "Leituras passivas reais e persistência/exportação; não prova precisão de sensores, desempenho esperado, ganhos, WPF, ETW, PresentMon ou reversão."
+  },
+  "tests": {
+    "passed": 487,
+    "failed": 0,
+    "notExecuted": 0,
+    "total": 487
+  },
+  "failedTests": [],
+  "publication": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/henri16bit/Otimizador-/releases/assets/675504504",
+        "contentType": "application/zip",
+        "createdAt": "2026-10-25T16:18:52Z",
+        "digest": "sha256:d2d5916f93896b33d4aae28591183010b788b14537fb9bb0022b44e436730904",
+        "downloadCount": 0,
+        "id": "RA_kwDOVJq4M84oQ2F4",
+        "label": "",
+        "name": "PCAnalyzer-windows-x64.zip",
+        "size": 149152576,
+        "state": "uploaded",
+        "updatedAt": "2026-10-25T16:18:57Z",
+        "url": "https://github.com/henri16bit/Otimizador-/releases/download/v0.7.0-preview.2/PCAnalyzer-windows-x64.zip"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/henri16bit/Otimizador-/releases/assets/675504503",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-10-25T16:18:52Z",
+        "digest": "sha256:181f7cd4bbc96373108936bc3c567cad2e0e2d4560c13a5c9e98d34f9c27b351",
+        "downloadCount": 0,
+        "id": "RA_kwDOVJq4M84oQ2F3",
+        "label": "",
+        "name": "PCAnalyzer-windows-x64.zip.sha256",
+        "size": 94,
+        "state": "uploaded",
+        "updatedAt": "2026-10-25T16:18:52Z",
+        "url": "https://github.com/henri16bit/Otimizador-/releases/download/v0.7.0-preview.2/PCAnalyzer-windows-x64.zip.sha256"
+      }
+    ],
+    "isDraft": false,
+    "url": "https://github.com/henri16bit/Otimizador-/releases/tag/v0.7.0-preview.2"
+  }
+}
