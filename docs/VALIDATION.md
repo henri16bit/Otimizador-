@@ -2,6 +2,8 @@
 
 ## Motor de recomendações e interpretação — 24/10/2026
 
+A tentativa Windows `v0.7.0-preview.1` confirmou os 487 testes C# e bloqueou publicação na verificação da linha DPC da tela inicial. O harness foi ajustado para trazer a linha à área visível e ler o conteúdo renderizado dos `Run`, preservando as asserções de leitura, contexto e interpretação. A nova tentativa `v0.7.0-preview.2` inclui captura e diagnóstico detalhado dessa verificação; ainda aguarda execução. Nenhum binário da tentativa anterior foi publicado.
+
 Validação local da evolução para `v0.7.0-preview.1`: compilação Release com `-warnaserror`, **zero avisos/erros**; **487/487 testes C# aprovados**, sem ignorados (`artifacts/test-results/recommendation-engine.trx`); **16 cenários PowerShell de rede**, **cinco verificações de pacote** e **cinco de publicação** aprovados. As duas últimas suítes usam recursos isolados e não publicam nem alteram adaptadores.
 
 O harness compila com **53 cenários WPF**, incluindo motivos, modal paginado, duração/confirmação DPC, contexto desconhecido em ETL, última leitura por indicador e sessão original dos destaques. A execução WPF e a validação nativa Windows desta versão ainda estão pendentes. O pacote disponível abaixo pertence à versão anterior até a conclusão do novo pipeline.

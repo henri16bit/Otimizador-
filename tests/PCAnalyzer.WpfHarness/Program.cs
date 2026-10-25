@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Threading;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -525,10 +526,7 @@ internal static class Program
             "Home must identify the last measured DPC value and its original context.");
         vm.NavigateCommand.Execute("dashboard"); window.UpdateLayout();
         await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); window.UpdateLayout();
-        Require(Descendants<TextBlock>(window).Any(t => t.Text.Contains("DPC máximo") && t.Text.Contains(dpc.Reading))
-            && Descendants<TextBlock>(window).Any(t => t.Text == dpc.Context)
-            && Descendants<TextBlock>(window).Any(t => t.Text == dpc.Interpretation),
-            "Home must render the valid measurement, capture context and interpretation together.");
+        await VerifyHomeMeasurementRenderingAsync(window, dpc);
         vm.NavigateCommand.Execute("latency"); window.UpdateLayout();
         dpcCalls = backend.DpcCalls;
         _acceptConfirmation = false;
@@ -579,6 +577,37 @@ internal static class Program
         Findings: [new("fixture.loss", "Rede", "Sem respostas ICMP na fixture", "O destino não respondeu nesta janela sintética.",
             FindingCategory.PossibleProblem, Severity.Warning, Confidence.Medium, [], "Confira o destino e compare outra janela.", "Fixture only", "Nenhuma alteração")],
         SelectionContext: "Loss fixture route");
+
+    private static async Task VerifyHomeMeasurementRenderingAsync(MainWindow window, HomeMeasurementRow expected)
+    {
+        // The reading is composed of bound Runs. Inspect its actual document text and
+        // the specific row, rather than the Text dependency property on unrelated blocks.
+        var list = Descendants<ItemsControl>(window).SingleOrDefault(c => c.IsVisible
+            && c.Items.OfType<HomeMeasurementRow>().Any(r => r.Name == expected.Name));
+        var item = list?.Items.OfType<HomeMeasurementRow>().SingleOrDefault(r => r.Name == expected.Name);
+        var container = item is null ? null : list!.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
+        container?.BringIntoView();
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+        static string Rendered(TextBlock text) => new TextRange(text.ContentStart, text.ContentEnd).Text.TrimEnd('\r', '\n');
+        var blocks = container is null ? [] : Descendants<TextBlock>(container).ToArray();
+        var visible = blocks.Where(t => t.IsVisible && t.ActualWidth > 0 && t.ActualHeight > 0).Select(Rendered).ToArray();
+        var reading = visible.Contains(expected.Name + " · " + expected.Reading);
+        var context = visible.Contains(expected.Context);
+        var interpretation = visible.Contains(expected.Interpretation);
+        var diagnostics = new StartupDiagnostics(["--smoke-test", "--smoke-output", "artifacts/ui-flow-screenshot.json"]);
+        diagnostics.CaptureView((FrameworkElement)window.Content, "consultation-home");
+        if (reading && context && interpretation) return;
+        var detail = JsonSerializer.Serialize(new
+        {
+            reading, context, interpretation, expected, bound = item,
+            container = container?.GetType().Name,
+            rowTexts = blocks.Select(t => new { t.Text, rendered = Rendered(t), t.IsVisible, t.ActualWidth, t.ActualHeight }),
+            visibleTexts = Descendants<TextBlock>(window).Where(t => t.IsVisible && t.ActualWidth > 0 && t.ActualHeight > 0)
+                .Select(Rendered).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().Take(80)
+        });
+        await File.WriteAllTextAsync("artifacts/ui-consultation-home-rendering.json", detail);
+        Require(false, $"Home measurement rendering: reading={reading}, context={context}, interpretation={interpretation}. " + detail);
+    }
 
     private static async Task VerifyMeasurementHistoryAsync()
     {

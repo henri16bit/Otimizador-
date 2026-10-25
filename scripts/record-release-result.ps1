@@ -61,6 +61,7 @@ $previews = @{
     'pcanalyzer-setting-preview' = 'artifacts/ui-flow-screenshot-setting-modal.png'
     'pcanalyzer-scale-preview' = 'artifacts/ui-flow-screenshot-audit-1366-scale-1.5-simulated.png'
     'pcanalyzer-category-result-preview' = 'artifacts/ui-flow-screenshot-network-result-fixture.png'
+    'pcanalyzer-consultation-preview' = 'artifacts/ui-flow-screenshot-consultation-home.png'
 }
 foreach ($name in $previews.Keys) {
     $preview = Get-ChildItem $previews[$name] -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
