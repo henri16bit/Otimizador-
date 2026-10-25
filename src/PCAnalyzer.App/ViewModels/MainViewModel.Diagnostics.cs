@@ -227,6 +227,11 @@ public sealed partial class MainViewModel
     private async Task RunTestAsync(string id, Func<IProgress<TestProgress>, CancellationToken, Task<TechnicalResult>> execute)
     {
         var definition = DiagnosticDefinitions.FirstOrDefault(d => d.Id == id) ?? TestCatalog.Get(id);
+        if (id == "dpc") definition = definition with
+        {
+            Name = $"Analisar DPC/ISR · {LatencySeconds} s",
+            Duration = $"{LatencySeconds} segundos de captura; preparação/UAC e processamento adicionais."
+        };
         var started = DateTimeOffset.UtcNow;
         var selectionContext = id == "ping" ? "Destino solicitado: " + PingHost.Trim() + "; a rota usada é decidida pelo Windows. A seleção de adaptador orienta a descoberta do gateway." :
             id is "frames-import" or "etl-import" ? "Captura importada; não representa o estado atual deste PC." : "Medição manual desta execução; compare condições equivalentes.";

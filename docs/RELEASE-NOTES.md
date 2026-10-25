@@ -1,4 +1,4 @@
-# PC Performance Analyzer v0.7.0-preview.2
+# PC Performance Analyzer v0.7.0-preview.3
 
 **Valor atual → recomendação fundamentada → motivo curto → investigação manual quando necessária.** Esta versão evolui o motor de recomendações e a interpretação das medições, preservando as categorias e a auditoria sem aplicação de ajustes.
 

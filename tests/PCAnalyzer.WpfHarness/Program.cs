@@ -511,7 +511,8 @@ internal static class Program
             vm.CaptureDpcCommand.Execute(null); await Until(() => !vm.IsBusy);
             Require(_confirmationCalls == confirmations + 1 && _confirmationText.Contains(seconds + " segundos")
                 && _confirmationText.Contains("Jogo fixture; cena A") && backend.LastDpcSeconds == seconds
-                && backend.LastDpcContext?.Contains(goal) == true && vm.SelectedSection?.Id == "latency",
+                && backend.LastDpcContext?.Contains(goal) == true && vm.SelectedSection?.Id == "latency"
+                && vm.CategoryTestTitle.Contains(seconds + " s", StringComparison.Ordinal),
                 "A manual DPC capture lost its explicit confirmation, selected duration, workload, or initiating category.");
         }
         vm.LatencySeconds = 17;
