@@ -1,14 +1,29 @@
 # Validação executada
 
-## Motor de recomendações e interpretação — 24/10/2026
+## Motor de recomendações e interpretação — v0.7.0-preview.3
 
-A tentativa Windows `v0.7.0-preview.1` confirmou os 487 testes C# e bloqueou publicação na verificação da linha DPC da tela inicial. O harness foi ajustado para trazer a linha à área visível e ler o conteúdo renderizado dos `Run`, preservando as asserções de leitura, contexto e interpretação. A nova tentativa `v0.7.0-preview.2` inclui captura e diagnóstico detalhado dessa verificação; ainda aguarda execução. Nenhum binário da tentativa anterior foi publicado.
+**Publicação concluída em 25/10/2026:** [execução Windows aprovada](https://github.com/henri16bit/Otimizador-/actions/runs/40211399181), código `a717c545477cad720c0b2d81d8b8b836e7840a3e`, [ZIP com executável](https://github.com/henri16bit/Otimizador-/releases/download/v0.7.0-preview.3/PCAnalyzer-windows-x64.zip) e [SHA256](https://github.com/henri16bit/Otimizador-/releases/download/v0.7.0-preview.3/PCAnalyzer-windows-x64.zip.sha256). Todos os passos registrados terminaram com sucesso, incluindo os arquivos extras de evidências. A release é pública e os dois arquivos constam como `uploaded`.
 
-Validação local da evolução para `v0.7.0-preview.1`: compilação Release com `-warnaserror`, **zero avisos/erros**; **487/487 testes C# aprovados**, sem ignorados (`artifacts/test-results/recommendation-engine.trx`); **16 cenários PowerShell de rede**, **cinco verificações de pacote** e **cinco de publicação** aprovados. As duas últimas suítes usam recursos isolados e não publicam nem alteram adaptadores.
+- Compilação Release com `-warnaserror`: zero avisos/erros; **487/487 testes C#**, sem falhas ou ignorados, no Linux e Windows.
+- **53 cenários WPF aprovados**, sem erros de binding: motivos específicos, modal com rolagem principal e paginação, duração/contexto/confirmação DPC, resultados na categoria, última fonte válida por indicador, histórico e abertura da sessão original pelo destaque. Os cenários usam fixtures identificadas e não executam capturas ou alterações reais.
+- **16 cenários PowerShell de rede**, **cinco testes de pacote** e **cinco de publicação** aprovados. O executável empacotado abriu **11 páginas/visões, 7 abas internas e 10 categorias**, verificou layout compacto e encerrou com sucesso.
+- Leitura real no runner **Windows Server 2025 Datacenter, build 26100**: 3 lotes de telemetria, 377 métricas persistidas, 693 avaliações de auditoria e 580 observações disponíveis. Registro 32/64 bits, processo próprio e topologia foram confrontados com APIs independentes. SQLite, metadados e exportação anônima JSON/HTML passaram.
+- Exemplos reais: Win32PrioritySeparation **0x2 (2)** foi exibido como lido, com orientação de manter; processo próprio com prioridade **abaixo do normal** e máscara **0xF**, sem agregação de outros executáveis; módulo com **1 GiB**, mas sem taxa de memória, recebeu **Sem recomendação fundamentada**. Esses valores pertencem ao runner, não ao PC do usuário.
+- ZIP: **149.152.653 bytes**; SHA256: `255e157114c00554b16124bf0ffa67a55cec48f2ff432a3a6503c18b4e28a57e`.
 
-O harness compila com **53 cenários WPF**, incluindo motivos, modal paginado, duração/confirmação DPC, contexto desconhecido em ETL, última leitura por indicador e sessão original dos destaques. A execução WPF e a validação nativa Windows desta versão ainda estão pendentes. O pacote disponível abaixo pertence à versão anterior até a conclusão do novo pipeline.
+| Provedor real | Disponíveis / total | Estados restantes no runner |
+| --- | --- | --- |
+| Windows | 487 / 506 | 15 exigiram permissão; 4 sem dados suficientes. |
+| Dispositivos/topologia | 18 / 20 | 2 sem suporte. |
+| Rede | 69 / 136 | 35 erros de leitura; 32 sem suporte. Não foram apresentados como leituras válidas. |
+| RAM/armazenamento | 6 / 8 | 2 sem dados suficientes. |
+| NVIDIA | 0 / 23 | 21 sem API/ferramenta; 2 sem dados suficientes. DRS real não foi validada. |
 
-Regras e rastreabilidade dos 20 requisitos: [RECOMMENDATION-ENGINE.md](RECOMMENDATION-ENGINE.md). Não foram validados o PC alvo, DPI físico, DRS NVIDIA real, I219-V, ETW/PresentMon em jogo ou benefício de desempenho.
+A aprovação não transforma os 35 erros de leitura de rede em suporte: essas consultas e as demais fontes indisponíveis precisam de inspeção no adaptador/driver alvo. Permanecem pendentes o Windows 10 Pro 22H2 do usuário, RTX 3060, I219-V, NVMe, DPI físico, ETW/PresentMon em jogo e medição de benefício/overhead. Nenhuma configuração foi alterada durante a validação.
+
+A tentativa `.1` passou nos 487 testes C# e bloqueou a publicação em uma asserção de apresentação: a verificação foi ajustada para trazer a linha à área visível e ler o texto renderizado dos `Run`. A `.2` passou em todo o pipeline e publicou o pacote. A revisão visual identificou um título fixo de 30 s; a `.3` corrigiu o nome exibido e persistido e repetiu a validação completa, incluindo a asserção para 30, 60 e 120 s.
+
+As capturas da tela inicial, linha DPC, lista/modal e layouts foram preservadas em notas Git por commit: `refs/notes/pcanalyzer-releases`, `pcanalyzer-ui-preview`, `pcanalyzer-consultation-preview`, `pcanalyzer-setting-preview` e `pcanalyzer-scale-preview`. Layouts automatizados em 1366×768/1920×1080 e escalas simuladas de 100%/125%/150% não substituem DPI físico. Regras e rastreabilidade dos 20 requisitos: [RECOMMENDATION-ENGINE.md](RECOMMENDATION-ENGINE.md).
 
 ## Experiência de auditoria por categoria — v0.6.0-preview.5
 

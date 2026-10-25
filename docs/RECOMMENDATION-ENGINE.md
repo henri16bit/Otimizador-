@@ -2,7 +2,7 @@
 
 Esta evolução mantém a auditoria sem aplicação de ajustes e dá significado às leituras antes de sugerir uma investigação. A presença de uma propriedade, de um valor diferente ou de uma hipótese antiga de comparação não basta para criar uma melhoria.
 
-Este documento descreve a implementação e a cobertura dos testes. Não declara a release publicada nem a validação Windows concluída. Os resultados das execuções ficam em [VALIDATION.md](VALIDATION.md).
+Implementação publicada em **v0.7.0-preview.3**, com 487 testes C# e 53 cenários WPF aprovados. A validação nativa cobre as fontes disponíveis no runner Windows; resultados, exemplos reais e limites ficam em [VALIDATION.md](VALIDATION.md).
 
 ## Como a recomendação é construída
 

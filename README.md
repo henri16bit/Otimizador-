@@ -4,6 +4,8 @@ Aplicativo desktop em C#/.NET e WPF para auditar configurações de performance 
 
 Esta entrega contém a fundação funcional e integrações reais implementadas, com testes de lógica, persistência e processamento de dados. **As integrações NVIDIA, dispositivos físicos, capturas ETW/PresentMon e precisão dos sensores precisam de validação no computador alvo.** A interface e as leituras nativas verificadas no runner Windows estão discriminadas na documentação de validação. Compilar a solução em Linux não demonstra esses critérios. O estado por módulo está em [PROGRESS.md](docs/PROGRESS.md), os resultados do ambiente de desenvolvimento em [VALIDATION.md](docs/VALIDATION.md) e o roteiro de aceitação em [WINDOWS-VALIDATION.md](docs/WINDOWS-VALIDATION.md).
 
+A análise separa inventário e observação passiva. As recomendações mostram valor atual e motivo; **INVESTIGAR DESEMPENHO** oferece testes manuais, incluindo DPC/ISR de 30, 60 ou 120 segundos. O resumo conserva medições válidas com contexto e não promete ganhos sem comparação. Regras e limites: [RECOMMENDATION-ENGINE.md](docs/RECOMMENDATION-ENGINE.md).
+
 ## Requisitos e compatibilidade
 
 - Arquitetura de publicação: Windows x64.
@@ -17,7 +19,7 @@ Windows 10 Pro 22H2 encerrou o suporte regular em **14 de outubro de 2025**. Ess
 
 ## Obter e executar a publicação
 
-Baixe [**PCAnalyzer-windows-x64.zip — v0.6.0-preview.5**](https://github.com/henri16bit/Otimizador-/releases/download/v0.6.0-preview.5/PCAnalyzer-windows-x64.zip). Essa prévia passou em 404 testes C# e 41 cenários WPF, além da abertura do executável no Windows; evidências e limites estão em [VALIDATION.md](docs/VALIDATION.md). Outras versões ficam em [Releases no GitHub](https://github.com/henri16bit/Otimizador-/releases), na seção **Assets**. Os links “Source code” contêm somente o código-fonte.
+Baixe [**PCAnalyzer-windows-x64.zip — v0.7.0-preview.3**](https://github.com/henri16bit/Otimizador-/releases/download/v0.7.0-preview.3/PCAnalyzer-windows-x64.zip). Essa prévia passou em 487 testes C# e 53 cenários WPF, além da abertura do executável no Windows; evidências e limites estão em [VALIDATION.md](docs/VALIDATION.md). Outras versões ficam em [Releases no GitHub](https://github.com/henri16bit/Otimizador-/releases), na seção **Assets**. Os links “Source code” contêm somente o código-fonte.
 
 Extraia o ZIP completo para uma pasta nova e gravável. Abra essa pasta e execute **PCAnalyzer.exe**; pelo PowerShell nessa pasta:
 
